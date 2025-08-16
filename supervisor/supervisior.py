@@ -111,16 +111,25 @@ class Supervisor():
                     break
                 else:
                     print(f"[Supervisor] 명령 '{cmd}' 처리 중...")
-            
+
                     text = self.set_prompt(cmd)
-                    command=self.get_command()
-                    self.system_prompt="You are a helpful assistant"
+
+                    # 2. 명령어 추출
+                    command = self.get_command()
+
+                    # 3. 시스템 프롬프트 원래대로 복원
+                    self.set_system_prompt("You are a helpful assistant")
                     self.build_messages()
-                    response = self.get_output(text,max_new_token=250)
-                    print({"command": command, "response": response})
-                    response={"command":command, "response":response}
-                    response = json.dumps(response).encode()
-                    self.socket.send_llm_response(response)
+
+                    # 4. 모델 응답 생성
+                    response_text = self.get_output(text, max_new_token=250)
+
+                    # 5. 출력 및 직렬화
+                    result = {"command": command, "response": response_text}
+                    print(result, flush=True)
+
+                    # 6. 전송
+                    self.socket.send_llm_response(json.dumps(result).encode())
            
         except Exception as e:
             print(e)

@@ -20,33 +20,23 @@ class SupervisorServer:
             self.conn, self.addr = self.server_socket.accept()
             threading.Thread(
                 target=self.handle_client,
+                daemon=True
             ).start()
-
-    def receive_all(self):
-        """모든 데이터 수신"""
-        chunks = []
-        while True:
-            chunk = self.conn.recv(4096)
-            if not chunk:
-                break
-            chunks.append(chunk)
-        return b"".join(chunks)
 
     def handle_client(self,):
         """클라이언트 연결 처리"""
-        with self.conn:
-            print(f"[Supervisor] Connected by {self.addr}")
-            try:
-                data = self.receive_all()
-                if not data:
-                    return
+        print(f"[Supervisor] Connected by {self.addr}")
+        try:
+            while True:
+                data = self.conn.recv(4096)
 
                 task_data = json.loads(data.decode())
-                print(f"[Supervisor] Received: {task_data}")
+                print(f"[Supervisor] Received: {task_data}", flush=True)
 
 
-            except Exception as e:
-                print(f"[Supervisor] Error: {e}")
+        except Exception as e:
+            print(f"[Supervisor] Error: {e}")
+
 
     def send_llm_response(self, response):
         """LLM 처리 결과 전송"""
