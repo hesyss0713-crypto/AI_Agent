@@ -7,7 +7,9 @@ class SupervisorServer:
         self.host = host
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
+        self.conn=None
+        self.addr=None
+        
     def start(self):
         """서버 시작"""
         self.server_socket.bind((self.host, self.port))
@@ -15,59 +17,49 @@ class SupervisorServer:
         print(f"[Supervisor] Listening on {self.host}:{self.port}")
 
         while True:
-            conn, addr = self.server_socket.accept()
+            self.conn, self.addr = self.server_socket.accept()
             threading.Thread(
                 target=self.handle_client,
-                args=(conn, addr),
-                daemon=True
             ).start()
 
-    def receive_all(self, sock):
+    def receive_all(self):
         """모든 데이터 수신"""
         chunks = []
         while True:
-            chunk = sock.recv(4096)
+            chunk = self.conn.recv(4096)
             if not chunk:
                 break
             chunks.append(chunk)
         return b"".join(chunks)
 
-    def handle_client(self, conn, addr):
+    def handle_client(self,):
         """클라이언트 연결 처리"""
-        with conn:
-            print(f"[Supervisor] Connected by {addr}")
+        with self.conn:
+            print(f"[Supervisor] Connected by {self.addr}")
             try:
-                data = self.receive_all(conn)
+                data = self.receive_all()
                 if not data:
                     return
 
                 task_data = json.loads(data.decode())
                 print(f"[Supervisor] Received: {task_data}")
 
-                # 여기서 LLM 처리 → 코드 실행 → 응답
-                processed_code = json.dumps({
-                    "status": "ok",
-                    "message": "코드 실행 완료"
-                }).encode()
-                self.send_llm_response(conn, processed_code)
 
             except Exception as e:
                 print(f"[Supervisor] Error: {e}")
-                conn.sendall(json.dumps({"status": "error", "message": str(e)}).encode())
 
-    def send_llm_response(self, conn, processed_code):
+    def send_llm_response(self, response):
         """LLM 처리 결과 전송"""
         try:
-            conn.sendall(processed_code)
+            self.conn.sendall(response)
         except Exception:
-            conn.sendall("Error!!".encode())
+            self.conn.sendall("Error!!".encode())
 
     def run_main(self):
         """메인 스레드 실행"""
         server_thread = threading.Thread(target=self.start, daemon=True)
         server_thread.start()
-
-        
+    
 
 
 if __name__ == "__main__":

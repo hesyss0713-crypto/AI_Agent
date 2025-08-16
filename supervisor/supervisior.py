@@ -1,6 +1,7 @@
 from utils import supervisor_socket
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import logging
+import json
 logging.basicConfig(level=logging.INFO)
 
 
@@ -73,21 +74,31 @@ class Supervisor():
     
     def get_command(self,):
         text = f"""
-        Determine which command the following request corresponds to.
-        Possible responses: "web", "agent", "llm", "code"
+        You are a classifier.
+        Task:
+        Classify the following request into exactly ONE category.
+
+        Categories:
+        -covnersation (usually general conversation, chit-chat)
+        -search (weather, person, latest info, etc.)
+        -code (algorithms, class, def, implementation)
+        -agent (meeting minutes, my file, dataset)
+
+        Rules:
+        - Now classify the request into one of: conversation, search, code, agent.
 
         Request: {self.prompt}
-
-        Reference:
-        - If it includes 'code', 'algorithm', 'def', 'class' → respond "code"
-        - If it includes 'search', '2025', 'news' → respond "web"
-        - If it includes 'meeting minutes', 'my file', 'from dataset' → respond "agent"
-        - For general knowledge queries or conversations → respond "llm"
-
-        Respond with exactly one command only:
         """
-        command=self.get_output(text,max_new_token=10)
         
+        self.system_prompt="You are a classifier"
+        self.build_messages()
+        
+        command = self.get_output(text, max_new_token=10).strip().lower()
+        command = command.replace("\n", " ")
+        # 후보군 중 첫 번째 매칭 반환
+        for candidate in ["conversation", "agent", "search", "code"]:
+            if candidate in command:
+                return candidate
         return command
     
     def run_supervisor(self):
@@ -103,24 +114,24 @@ class Supervisor():
             
                     text = self.set_prompt(cmd)
                     command=self.get_command()
+                    self.system_prompt="You are a helpful assistant"
+                    self.build_messages()
                     response = self.get_output(text,max_new_token=250)
                     print({"command": command, "response": response})
-                    
-                    
-                    
-                    
+                    response={"command":command, "response":response}
+                    response = json.dumps(response).encode()
+                    self.socket.send_llm_response(response)
+           
         except Exception as e:
             print(e)
 
                 
-                
-
+            
 if __name__=="__main__":
     
     model_name="Qwen/Qwen2.5-1.5B-Instruct"
     host="127.0.0.1"
-    port=9001
-    
+    port=9006
     supervisor=Supervisor(model_name,host,port)
     supervisor.load_model()
     supervisor.run_supervisor()
