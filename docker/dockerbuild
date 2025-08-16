@@ -1,6 +1,8 @@
 FROM ubuntu:24.04
-WORKDIR /home/llm_agent
-EXPOSE 9001 9002 9003 9004 9005
+WORKDIR /workspace
+EXPOSE 9005 9006 9007 9008
+
+# 각 agent 마다 포트 번호가 다 달라야함
 
 
 # 패키지 관련 추가 명시
@@ -59,11 +61,11 @@ RUN mkdir -p /var/run/sshd && \
 # COPY sshd_config /etc/ssh/sshd_config
 
 
-# 사용자 생성 아이디: llm 비밀번호: llm
-RUN useradd -m -s /bin/bash llm && echo "llm:llm" | chpasswd && adduser llm sudo
+# 사용자 생성 아이디: tester 비밀번호: tester
+RUN useradd -m -s /bin/bash llm && echo "tester:tester" | chpasswd && adduser tester sudo
 
 # 사용자 홈에 .xsession 생성
-USER llm
+USER tester
 RUN echo "startxfce4" > ~/.xsession
 
 # 다시 루트로 전환
