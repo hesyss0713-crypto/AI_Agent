@@ -62,7 +62,7 @@ RUN mkdir -p /var/run/sshd && \
 
 
 # 사용자 생성 아이디: tester 비밀번호: tester
-RUN useradd -m -s /bin/bash llm && echo "tester:tester" | chpasswd && adduser tester sudo
+RUN useradd -m -s /bin/bash tester && echo "tester:tester" | chpasswd && adduser tester sudo
 
 # 사용자 홈에 .xsession 생성
 USER tester
