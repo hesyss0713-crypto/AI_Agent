@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
-WORKDIR /home/llm_agent
-EXPOSE 9001 9002 9003 9004 9005
+WORKDIR /workspace
+EXPOSE 9005 9006 9007 9008 9009
 
 
 # 패키지 관련 추가 명시
