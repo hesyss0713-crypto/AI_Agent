@@ -1,8 +1,12 @@
 import socket
 import json
 import threading
+import sys
+import os
 import time
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from code_runner import CodeRunner
+
 
 
 class CoderClient:
@@ -27,10 +31,9 @@ class CoderClient:
                     print("[CoderClient] 받은 task:", task)
 
                     # 2. task 실행
-                    code_str = task.get("code", "")
-                    open_vscode = task.get("open_vscode", False)
+                    code_str = task['code']
 
-                    output, error = self.runner.run(code_str, open_vscode)
+                    output, error = self.runner.run(code_str)
 
                     # 3. 실행 결과 Supervisor에 회신
                     result = {
@@ -50,11 +53,11 @@ class CoderClient:
         """Supervisor와 연결 시도 및 메인 루프"""
         while self.running:
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect((self.supervisor_host, self.supervisor_port))
-                    print(f"[CoderClient] Supervisor({self.supervisor_host}:{self.supervisor_port}) 연결 성공")
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect((self.supervisor_host, self.supervisor_port))
+                print(f"[CoderClient] Supervisor({self.supervisor_host}:{self.supervisor_port}) 연결 성공")
 
-                    self.handle_connection(s)
+                self.handle_connection(s)
 
             except Exception as e:
                 print(f"[CoderClient] 연결 실패, 재시도 중... {e}")
@@ -64,5 +67,5 @@ class CoderClient:
 
 
 if __name__ == "__main__":
-    client = CoderClient(host="172.17.0.3", port=9000)
+    client = CoderClient(host="172.17.0.2", port=9000)
     client.run()
