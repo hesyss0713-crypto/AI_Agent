@@ -43,7 +43,7 @@ x11vnc -display :1 -auth /root/.Xauthority -forever -nopw -shared -bg
 google-chrome --no-sandbox --disable-dev-shm-usage --disable-gpu&
 
 # 6. noVNC 실행
-/opt/noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 9001 &
+/opt/noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 9006 &
 
 # 7. xrdp 실행
 /usr/sbin/xrdp --nodaemon &
