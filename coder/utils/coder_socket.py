@@ -4,17 +4,19 @@ import threading
 import sys
 import os
 import time
+from db.db import DBManager
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from code_runner import CodeRunner
 
 
 
 class CoderClient:
-    def __init__(self, host="172.17.0.3", port=9000):
+    def __init__(self, host="172.17.0.2", port=9000):
         self.supervisor_host = host
         self.supervisor_port = port
         self.running = True
         self.runner = CodeRunner(timeout=10)  # CodeRunner 인스턴스 생성
+        self.db = DBManager()
 
     def handle_connection(self, conn: socket.socket):
         """Supervisor와 연결을 유지하며 task를 받고 실행"""
@@ -31,23 +33,39 @@ class CoderClient:
                     print("[CoderClient] 받은 task:", task)
 
                     # 2. task 실행
+
+                    log_id = task['log_id']
+                                  
                     code_str = task['code']
 
                     output, error = self.runner.run(code_str)
 
+                    status = "success" if not error else "error"
+
+                    self.db.insert_coder_log(
+                        log_id = log_id,
+                        status = status,
+                        output = output,
+                        error_message = error
+                    )
+
                     # 3. 실행 결과 Supervisor에 회신
                     result = {
-                        "status": "success" if not error else "error",
+                        "status": status,
                         "task_id": task.get("id"),
                         "output": output,
                         "error": error,
                     }
+
+                    
                     conn.sendall(json.dumps(result).encode())
                     print("[CoderClient] 결과 전송 완료")
 
                 except Exception as e:
                     print(f"[CoderClient] Error: {e}")
                     break
+
+                self.db.close()
 
     def run(self):
         """Supervisor와 연결 시도 및 메인 루프"""

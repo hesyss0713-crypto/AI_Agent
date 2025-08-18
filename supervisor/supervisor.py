@@ -4,6 +4,7 @@ import logging
 import json
 import re
 from typing import Dict,List
+from utils.db.db import DBManager
 logging.basicConfig(level=logging.INFO)
 
 
@@ -16,10 +17,11 @@ class Supervisor():
         self.prompt=None
         self.system_prompt="You are a helpful assistant"
         self.socket=socket.SupervisorServer(host, port)
+        self.db = DBManager()
     
     def load_model(self)->None :
         try:
-            print("Load model: "+ self.model_name)
+            print("Load mode l: "+ self.model_name)
             self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype="auto",
@@ -84,6 +86,8 @@ class Supervisor():
         
         Answer strictly with a single word like 'code' or 'search'. and you can choose only one.
 
+        if 'code','python' is in prompt, command must be 'code'.
+
         '''
         # text = f"""
         # You are a classifier.
@@ -146,27 +150,50 @@ class Supervisor():
 
                     # 2. 명령어 추출
                     command = self.get_command()
-
+                    print(f"command is : {command}")
                     # 3. 시스템 프롬프트 원래대로 복원
                     self.set_system_prompt("You are a helpful assistant")
                     self.build_messages()
 
                     # 4. 모델 응답 생성
-                    response_text = self.get_output(text, max_new_token=350)
+                    supervisor_reply = self.get_output(text, max_new_token=350)
 
                     # 5 code 정제
+                    code = self.get_code(supervisor_reply)
 
-                    code = self.get_code(response_text)
+                    # 6 filename 명시
+                    filename = None
+                    if command == "code":
+                        filename = input(f"[Supervisor] 해당 코드의 파일명을 입력하세요.")
+
+                    #
+                    log_id = self.db.insert_supervisor_log(
+                        requester = "uers1",
+                        command = command,
+                        code = code,
+                        prompt = cmd,
+                        supervisor_reply = supervisor_reply,
+                        filename = filename,
+                        agent_name = "coder",
+                    )
 
                     # 6. 출력 및 직렬화
-                    result = {"command": command, "code": code, "response": response_text}
+                    result = {
+                        "command": command, 
+                        "code": code, 
+                        "supervisor_reply": supervisor_reply,
+                        "log_id" : log_id
+                        }
+                    
                     print(result, flush=True)
 
                     # 7. 전송
-                    self.socket.send_llm_response(json.dumps(result).encode())
+                    self.socket.send_supervisor_response(json.dumps(result).encode())
            
         except Exception as e:
             print(e)
+        
+        self.db.close()
 
                 
             

@@ -39,8 +39,8 @@ class SupervisorServer:
             print(f"[Supervisor] Error: {e}")
 
 
-    def send_llm_response(self, response):
-        """LLM 처리 결과 전송"""
+    def send_supervisor_response(self, response):
+        """supervisor 처리 결과 전송"""
         try:
             self.conn.sendall(response)
         except Exception:
