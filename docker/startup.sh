@@ -19,7 +19,7 @@ sleep 0.5
 
 grep -q "(LXTerminal)" /root/.fluxbox/menu 2>/dev/null || \
     sed -i '/^\[end\]/i\  [exec] (LXTerminal) {lxterminal}' /root/.fluxbox/menu
-grep -q "(LXTerminal)" /root/.fluxbox/menu 2>/dev/null || \
+grep -q "(VScode)" /root/.fluxbox/menu 2>/dev/null || \
     sed -i '/^\[end\]/i\  [exec] (VScode) {sh -c "yes | code --no-sandbox --user-data-dir=/root/.vscode-data"}' /root/.fluxbox/menu
 
 
