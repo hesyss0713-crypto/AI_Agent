@@ -2,10 +2,12 @@
 AI_Agent
 # command on linux
 
-cd /AI_Agent or your pull repository
+``cd /AI_Agent ``
 
-sudo docker buildx build -t coder:latest -f  ./dockerbuild --load .
-sudo docker run -it -p 9006:9006 -p 9007:9007 -p 9008:9008 -p 9009:9009 -p 9010:9010 coder
+`` sudo docker buildx build -t coder:latest -f  ./dockerbuild --load . ``
+
+
+`` sudo docker run -it -p 9006:9006 -p 9007:9007 -p 9008:9008 -p 9009:9009 -p 9010:9010 coder ``
 
 If you change your vnc port then edit your dockerbuild and startup.sh
 
