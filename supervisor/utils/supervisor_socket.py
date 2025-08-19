@@ -42,8 +42,8 @@ class SupervisorServer:
         """LLM 처리 결과 전송"""
         try:
             self.conn.sendall(response)
-        except Exception:
-            self.conn.sendall("Error!!".encode())
+        except Exception as e :
+            print(e)
 
     def run_main(self):
         """메인 스레드 실행"""

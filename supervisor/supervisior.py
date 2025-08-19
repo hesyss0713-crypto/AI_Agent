@@ -11,8 +11,11 @@ class Supervisor():
         self.tokenizer=None
         self.model_name = model_name
         self.messages=None
-        self.prompt=None
-        self.system_prompt="You are a helpful assistant"
+        self.default_system_content="You are a helpful assistant."
+        self.prompt= [
+    {"role": "system", "content": self.default_system_content},
+    {"role": "user", "content": " "}]
+        
         self.socket=supervisor_socket.SupervisorServer(host, port)
     
     def load_model(self)->None :
@@ -30,36 +33,19 @@ class Supervisor():
     
     
     def set_system_prompt(self, content: str) -> None:
-        self.system_prompt = content
+        self.prompt[0]["content"]=content
 
-    def build_system_message(self) -> dict[str, str]:
-        return {"role": "system", "content": self.system_prompt}
-    
-    
-    ## message 타입 설정
-    def build_messages(self) -> list[dict[str, str]]:
-        self.messages= [
-                self.build_system_message(),
-                {"role": "user", "content": self.prompt or ""},
-            ]
-
-
-    
-    ## 프롬프트 입력
-    def set_prompt(self,prompt):
-        self.prompt=prompt
-        self.build_messages()
-        text = self.tokenizer.apply_chat_template(
-                    self.messages,
-                    tokenize=False,
-                    add_generation_prompt=True
-                )
-        return text
-    
+    def set_user_prompt(self, content: str) -> None:
+        self.prompt[1]["content"]=content
+        
     ## output 생성
-    def get_output(self,text,max_new_token):
+    def get_output(self,max_new_token):
+        text = self.tokenizer.apply_chat_template(
+        self.prompt,
+        tokenize=False,
+        add_generation_prompt=True
+    )
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-
         generated_ids = self.model.generate(
             **model_inputs,
             max_new_tokens=max_new_token
@@ -72,29 +58,20 @@ class Supervisor():
         return response
     
     
-    def get_command(self,):
-        text = f"""
-        You are a classifier.
-        Task:
-        Classify the following request into exactly ONE category.
-
-        Categories:
-        -covnersation (usually general conversation, chit-chat)
-        -search (weather, person, latest info, etc.)
-        -code (algorithms, class, def, implementation)
-        -agent (meeting minutes, my file, dataset)
-
-        Rules:
-        - Now classify the request into one of: conversation, search, code, agent.
-
-        Request: {self.prompt}
-        """
+    def get_command(self,text):
+        content=f"""Decide whether the above question is related to 
         
-        self.system_prompt="You are a classifier"
-        self.build_messages()
+        [code, conversation, search, agent] 
         
-        command = self.get_output(text, max_new_token=10).strip().lower()
-        command = command.replace("\n", " ")
+        Answer strictly with a single word like 'code' or 'search'. and you can choose only one.
+
+        if 'code','python' is in prompt, command must be 'code'."""
+        
+        
+        self.set_system_prompt(content)
+        self.set_user_prompt(text)
+        command=self.get_output(max_new_token=10)
+        
         # 후보군 중 첫 번째 매칭 반환
         for candidate in ["conversation", "agent", "search", "code"]:
             if candidate in command:
@@ -105,24 +82,23 @@ class Supervisor():
         try:
             self.socket.run_main()
             while True:
-                cmd = input("Supervisor main thread > ")
-                if cmd.lower() == "exit":
+                text = input("Supervisor main thread > ")
+                if text.lower() == "exit":
                     print("[Supervisor] 종료")
                     break
                 else:
-                    print(f"[Supervisor] 명령 '{cmd}' 처리 중...")
+                    print(f"[Supervisor] 명령 '{text}' 처리 중...")
 
-                    text = self.set_prompt(cmd)
+                    self.set_user_prompt(text)
 
                     # 2. 명령어 추출
-                    command = self.get_command()
-
-                    # 3. 시스템 프롬프트 원래대로 복원
-                    self.set_system_prompt("You are a helpful assistant")
-                    self.build_messages()
-
+                    command = self.get_command(text)
+                    
+                    # 3. 유저 응답 추출
+                    self.set_system_prompt(self.default_system_content)
+                    
                     # 4. 모델 응답 생성
-                    response_text = self.get_output(text, max_new_token=250)
+                    response_text = self.get_output( max_new_token=250)
 
                     # 5. 출력 및 직렬화
                     result = {"command": command, "response": response_text}
