@@ -3,7 +3,7 @@ import psycopg2.extras
 
 
 class DBManager:
-    def __init__(self, host="localhost", user="admin", password="1234", database="Aiagent", port=9000):
+    def __init__(self, host='172.17.0.4', user="admin", password="1234", database="Aiagent", port=5432):
         self.conn = psycopg2.connect(
             host=host,
             user=user,

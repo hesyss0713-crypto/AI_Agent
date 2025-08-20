@@ -3,6 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import re
 import logging
 import json
+from utils.db.db import DBManager
 logging.basicConfig(level=logging.INFO)
 
 
@@ -11,7 +12,9 @@ class Supervisor():
         self.model=None
         self.tokenizer=None
         self.model_name = model_name
-        self.messages=None
+        self.messages=None        
+        self.socket=socket.SupervisorServer(host, port)
+        self.db = DBManager()
         self.default_system_content="You are a helpful assistant."
         self.prompt= [
             {
@@ -23,8 +26,6 @@ class Supervisor():
                 "content": " "
                 }
             ]
-        
-        self.socket=socket.SupervisorServer(host, port)
     
     def load_model(self)->None :
         try:
@@ -136,11 +137,26 @@ class Supervisor():
                     
                     code = self.get_code(response_text)
 
+                    if command == 'code':
+                        filename = input("[Supervisor] 해당 코드를 저장할 파일이름을 정해주세요.")
+
+                    log_id = self.db.insert_supervisor_log(
+                        requester = "user1",
+                        command = command,
+                        code = code,
+                        prompt = prompt,
+                        supervisor_reply = response_text,
+                        filename = filename,
+                        agent_name = str(command) + "er"
+
+                    )
+
                     # 5. 출력 및 직렬화
                     result = {
                         "command": command, 
                         "code": code,
-                        "response_text": response_text
+                        "response_text": response_text,
+                        "log_id" : log_id
                         }
 
                     print(result)
@@ -157,7 +173,7 @@ if __name__=="__main__":
     
     model_name="Qwen/Qwen2.5-1.5B-Instruct"
     host="0.0.0.0"
-    port=9001
+    port=9002
     supervisor=Supervisor(model_name,host,port)
     supervisor.load_model()
     supervisor.run_supervisor()
