@@ -122,6 +122,7 @@ class Supervisor():
 
                     self.set_user_prompt(text)
                     prompt = self.prompt[1]["content"]
+                    breakpoint()
 
                     # 2. 명령어 추출
                     command = self.get_command(text)
