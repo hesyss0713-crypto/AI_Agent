@@ -66,8 +66,7 @@ class Supervisor():
         Answer strictly with a single word like 'code' or 'search'. and you can choose only one.
 
         if 'code','python' is in prompt, command must be 'code'."""
-        
-        
+
         self.set_system_prompt(content)
         self.set_user_prompt(text)
         command=self.get_output(max_new_token=10)
@@ -98,7 +97,7 @@ class Supervisor():
                     self.set_system_prompt(self.default_system_content)
                     
                     # 4. 모델 응답 생성
-                    response_text = self.get_output( max_new_token=250)
+                    response_text = self.get_output( max_new_token=500)
 
                     # 5. 출력 및 직렬화
                     result = {"command": command, "response": response_text}
@@ -115,14 +114,12 @@ class Supervisor():
 if __name__=="__main__":
     
     model_name="Qwen/Qwen2.5-1.5B-Instruct"
-    host="127.0.0.1"
+    host="0.0.0.0"
     port=9006
     supervisor=Supervisor(model_name,host,port)
     supervisor.load_model()
     supervisor.run_supervisor()
     
     
-
-
 
    

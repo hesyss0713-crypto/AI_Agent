@@ -7,7 +7,7 @@ import shutil
 import time
 import re
 from utils import coder_socket
-
+import threading
 
 class CodeRunner:
     """
@@ -37,10 +37,31 @@ class CodeRunner:
         self.python = python_executable or sys.executable
         self.last_meta = {"file": None, "log": None}
         self.coder_socket=coder_socket.CoderClient(host,port)
+        self.coder_socket.on_message_callback = self.event_message
 
     # ---------------- Public API ---------------- #
+    def event_message(self,message):
+        # 2. task 실행
+        code_str = message['code']
+        
+        output, error = self.run(code_str)
 
-    def run(self, code_str: str, mode: str = "background"):
+        # 3. 실행 결과 Supervisor에 회신
+        result = {
+            "status": "success" if not error else "error",
+            "task_id": message.get("id"),
+            "output": output,
+            "error": error,
+        }
+        self.coder_socket.send_message(result)
+    
+    def run(self):
+        coder_socet_thread=threading.Thread(target=self.coder_socket.run())
+        coder_socet_thread.start()
+        
+        
+    
+    def run_code(self, code_str: str, mode: str = "background"):
         if not code_str:
             return "", "Empty code_str."
 
@@ -111,6 +132,7 @@ class CodeRunner:
         
 
 if __name__ == "__main__":
-    coder=CodeRunner(host="172.17.0.1",port=9001)
-    coder.coder_socket.run()
+    coder=CodeRunner(host="172.17.0.1",port=9006)
+    coder.run()
+
     

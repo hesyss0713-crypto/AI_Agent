@@ -4,9 +4,7 @@ import threading
 import sys
 import os
 import time
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from code_runner import CodeRunner
-
+import queue
 
 
 class CoderClient:
@@ -14,36 +12,35 @@ class CoderClient:
         self.supervisor_host = host
         self.supervisor_port = port
         self.running = True
+        self.sock=None
+        self.on_message_callback = None 
         
-
-    def handle_connection(self, conn: socket.socket):
+    ## 메세지 받기
+    def on_message(self, message: str)->None: # callback
+        if self.on_message_callback:
+            self.on_message_callback(message)
+    
+    ## 결과 전송
+    def send_message(self,result ):
+        self.sock.sendall(json.dumps(result).encode())
+        print("[CoderClient] 결과 전송 완료")
+    
+    
+    def handle_connection(self,):
         """Supervisor와 연결을 유지하며 task를 받고 실행"""
-        with conn:
+        with self.sock :
             while self.running:
                 try:
                     # 1. Supervisor → Client : task 수신
-                    data = conn.recv(8192)
+                    data = self.sock.recv(8192)
                     if not data:
                         print("[CoderClient] 연결 종료됨.")
                         break
 
-                    task = json.loads(data.decode())
-                    print("[CoderClient] 받은 task:", task)
-
-                    # 2. task 실행
-                    code_str = task['code']
-
-                    output, error = self.runner.run(code_str)
-
-                    # 3. 실행 결과 Supervisor에 회신
-                    result = {
-                        "status": "success" if not error else "error",
-                        "task_id": task.get("id"),
-                        "output": output,
-                        "error": error,
-                    }
-                    conn.sendall(json.dumps(result).encode())
-                    print("[CoderClient] 결과 전송 완료")
+                    message = json.loads(data.decode())
+                    print("[CoderClient] 받은 task:", message)
+                    
+                    self.on_message(message)
 
                 except Exception as e:
                     print(f"[CoderClient] Error: {e}")
@@ -53,11 +50,10 @@ class CoderClient:
         """Supervisor와 연결 시도 및 메인 루프"""
         while self.running:
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect((self.supervisor_host, self.supervisor_port))
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock .connect((self.supervisor_host, self.supervisor_port))
                 print(f"[CoderClient] Supervisor({self.supervisor_host}:{self.supervisor_port}) 연결 성공")
-
-                self.handle_connection(s)
+                self.handle_connection()
 
             except Exception as e:
                 print(f"[CoderClient] 연결 실패, 재시도 중... {e}")
