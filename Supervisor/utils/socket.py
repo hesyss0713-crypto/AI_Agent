@@ -3,10 +3,11 @@ import json
 import threading
 
 class SupervisorServer:
-    def __init__(self, host="0.0.0.0", port=9000):
+    def __init__(self, host="0.0.0.0", port=9001):
         self.host = host
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.conn=None
         self.addr=None
         
@@ -38,12 +39,12 @@ class SupervisorServer:
             print(f"[Supervisor] Error: {e}")
 
 
-    def send_llm_response(self, response):
-        """LLM 처리 결과 전송"""
+    def send_supervisor_response(self, response):
+        """supervisor 처리 결과 전송"""
         try:
             self.conn.sendall(response)
-        except Exception as e :
-            print(e)
+        except Exception:
+            self.conn.sendall("Error!!".encode())
 
     def run_main(self):
         """메인 스레드 실행"""
