@@ -2,6 +2,7 @@ from utils import socket
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import logging
 import json
+import re
 logging.basicConfig(level=logging.INFO)
 
 
@@ -155,7 +156,7 @@ if __name__=="__main__":
     
     model_name="Qwen/Qwen2.5-1.5B-Instruct"
     host="0.0.0.0"
-    port=9001
+    port=9006
     supervisor=Supervisor(model_name,host,port)
     supervisor.load_model()
     supervisor.run_supervisor()

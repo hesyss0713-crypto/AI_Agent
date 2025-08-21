@@ -7,6 +7,7 @@ import shutil
 import time
 import re
 from utils import coder_socket
+import subprocess
 import threading
 
 class CodeRunner:
@@ -39,12 +40,18 @@ class CodeRunner:
         self.coder_socket=coder_socket.CoderClient(host,port)
         self.coder_socket.on_message_callback = self.event_message
 
+   
+    
     # ---------------- Public API ---------------- #
     def event_message(self,message):
         # 2. task 실행
         code_str = message['code']
         
-        output, error = self.run(code_str)
+        
+        # file_str = message['file']
+        
+        
+        output, error = self.run_code(code_str)
 
         # 3. 실행 결과 Supervisor에 회신
         result = {
