@@ -18,17 +18,17 @@ class DBManager:
     # 1. supervisor_logs 관리
     # ------------------------------
     def insert_supervisor_log(self, requester, command, code, prompt, agent_name,
-                              supervisor_reply=None, filename=None, parent_id=None):
+                              supervisor_reply=None, filename=None, parent_id=None, url=None):
         """
         supervisor_logs 테이블에 요청 로그 저장
         """
         sql = """
         INSERT INTO supervisor_logs
-        (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id, url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """
-        values = (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id)
+        values = (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id, url)
 
         self.cursor.execute(sql, values)
         new_id = self.cursor.fetchone()["id"]

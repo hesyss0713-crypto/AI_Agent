@@ -1,7 +1,8 @@
-from utils import socket
+from utils import supervisor_socket
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import re, logging, json
 from utils.db.db import DBManager
+from utils.web_manager import WebManager
 
 logging.basicConfig(level=logging.INFO)
 
@@ -11,12 +12,13 @@ class Supervisor():
         self.tokenizer = None
         self.model_name = model_name
 
-        # ✅ 대화 메시지 버퍼: system 1개로 시작 (이후 add_message로만 관리)
+        # 대화 메시지 버퍼: system 1개로 시작 (이후 add_message로만 관리)
         self.default_system_content = "You are a helpful assistant."
         self.messages = [{"role": "system", "content": self.default_system_content}]
 
-        self.socket = socket.SupervisorServer(host, port)
+        self.socket = supervisor_socket.SupervisorServer(host, port)
         self.db = DBManager()
+        self.web_manager = WebManager()
 
     # ===== 모델 로드 =====
     def load_model(self) -> None:
@@ -70,9 +72,11 @@ class Supervisor():
     def get_command(self, user_text: str) -> str:
         system_cls = (
             "Decide whether the user request is related to exactly one of "
-            "[code, conversation, search, agent]. "
+            "[code, conversation, search, agent, git]. "
             "Respond with a single lowercase word only. "
             "If the prompt contains 'code' or 'python', the command must be 'code'."
+            "The command must be 'git',if git url is including user prompt. specifically git command means user wanna make a own's project from git repository"
+            "if 'project' in user request, it must be git command "
         )
         temp = [
             {"role": "system", "content": system_cls},
@@ -82,16 +86,26 @@ class Supervisor():
 
         # 정규화 & 후보 매칭
         norm = re.sub(r"[^a-z]", "", raw.lower())
-        for cand in ["code", "conversation", "search", "agent"]:
+        for cand in ["code", "conversation", "search", "agent", "git"]:
             if cand in norm:
                 return cand
         return "conversation"  # fallback
-
+    
+    def extract_urls(self, prompt: str) -> str:
+        # URL 패턴 정규식 (http, https 포함)
+        url_pattern = r'(https?://[^\s]+)'
+        match = re.search(url_pattern, prompt)
+        return match.group(0) if match else ""
+    
     # ===== 실행 루프 =====
     def run_supervisor(self):
         try:
             self.socket.run_main()
             while True:
+                code = None
+                url = None
+                filename = None            
+
                 text = input("[Supervisor] 무엇을 도와드릴까요? ")
                 if text.lower() == "exit":
                     print("[Supervisor] 종료")
@@ -106,15 +120,25 @@ class Supervisor():
                 # 3) 모델 응답 생성 (대화 버퍼 기반)
                 response_text = self.get_output(max_new_token=450)
 
+                if command == "code":
+                    code = self.get_code(response_text)
+                    filename = input("[Supervisor] 해당 코드를 저장할 파일이름을 정해주세요: ").strip() or None
+                
+                elif command == "git":
+                    url = self.extract_urls(text)
+                    rd_me = self.web_manager.get_information_web(url)
+                    self.add_message("user",'summurize ' + rd_me)
+                    summurize_git = self.get_output(max_new_token=450)
+                    
+                    tmp_status = input(f"{summurize_git}\n 해당 내용이 맞나요? [Y/N]")
+                    
+                    if tmp_status =='n' or tmp_status == "N":
+                        continue
+
                 # 4) 어시스턴트 응답 누적
                 self.add_message("assistant", response_text)
 
-                # 5) 코드 추출 + 파일명(옵션)
-                code = self.get_code(response_text)
-                filename = None
-                if command == "code" and code:
-                    filename = input("[Supervisor] 해당 코드를 저장할 파일이름을 정해주세요: ").strip() or None
-
+            
                 # 6) 로그 저장
                 log_id = self.db.insert_supervisor_log(
                     requester="user1",
@@ -124,6 +148,7 @@ class Supervisor():
                     supervisor_reply=response_text,
                     filename=filename,
                     agent_name=f"{command}er",
+                    url = url
                 )
 
                 # 7) 결과 출력/전송
@@ -132,7 +157,8 @@ class Supervisor():
                     "code": code,
                     "response_text": response_text,
                     "log_id": log_id,
-                    "filename" : filename
+                    "filename" : filename,
+                    "url" : url
                 }
                 print(result)
                 self.socket.send_supervisor_response(json.dumps(result).encode())
