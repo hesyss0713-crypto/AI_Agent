@@ -6,54 +6,56 @@ import sys
 import shutil
 import time
 import re
-from utils import coder_socket
+from utils import coder_socket,file_manager
 import subprocess
 import threading
 
 class CodeRunner:
     """
-    Linux 전용 CodeRunner
+    Linux ?? CodeRunner
 
     - run(code_str, open_vscode=False, mode="background")
-        mode = "background" : 창 없이 백그라운드 실행 (stdout/stderr 캡처)
+        mode = "background" : ? ?? ????? ?? (stdout/stderr ??)
 
-      반환값(튜플): (stdout, stderr)
-        * background: 실제 캡처한 결과를 반환
-        * terminal  : 터미널에 표시가 목적이라 ("", "") 반환
-                      (로그 경로는 self.last_meta["log"]에 저장됨)
+      ???(??): (stdout, stderr)
+        * background: ?? ??? ??? ??
+        * terminal  : ???? ??? ???? ("", "") ??
+                      (?? ??? self.last_meta["log"]? ???)
 
     - cleanup_last_file():
-        마지막 실행에서 만든 임시 파일/로그를 삭제
+        ??? ???? ?? ?? ??/??? ??
     """
 
-    def __init__(self,host : str, port : int, timeout: int = 10, display: str | None = None, python_executable: str | None = None):
+    def __init__(self,host : str, port : int, timeout: int = None, display: str | None = None, python_executable: str | None = None):
         """
         Args:
-            timeout: background 모드에서의 실행 제한(초)
-            display: 터미널을 띄울 X 디스플레이. 예) ':0', ':1'. None이면 환경변수 DISPLAY 사용
-            python_executable: 사용할 파이썬 인터프리터 경로. 기본은 sys.executable
+            timeout: background ????? ?? ??(?)
+            display: ???? ?? X ?????. ?) ':0', ':1'. None?? ???? DISPLAY ??
+            python_executable: ??? ??? ????? ??. ??? sys.executable
         """
         self.timeout = timeout
-        self.display = display  # 필요 시 ':1' 등으로 지정
+        self.display = display  # ?? ? ':1' ??? ??
         self.python = python_executable or sys.executable
         self.last_meta = {"file": None, "log": None}
         self.coder_socket=coder_socket.CoderClient(host,port)
         self.coder_socket.on_message_callback = self.event_message
+        self.file_manager=file_manager.FileManager()
 
-   
+    def agent_unzip(self, zip_file):
+        pass
     
+    def agent_zip(self, zip_file):
+        pass
     # ---------------- Public API ---------------- #
     def event_message(self,message):
-        # 2. task 실행
+        # 2. task ??
         code_str = message['code']
-        
         
         # file_str = message['file']
         
-        
         output, error = self.run_code(code_str)
-
-        # 3. 실행 결과 Supervisor에 회신
+        
+        # 3. ?? ?? Supervisor? ??
         result = {
             "status": "success" if not error else "error",
             "task_id": message.get("id"),
@@ -63,12 +65,15 @@ class CodeRunner:
         self.coder_socket.send_message(result)
     
     def run(self):
+        #sokcet start
         coder_socet_thread=threading.Thread(target=self.coder_socket.run())
         coder_socet_thread.start()
         
         
-    
-    def run_code(self, code_str: str, mode: str = "background"):
+        
+    ## Require supervisor send format edit
+    ## def run_code(self, code_str: str, mode: str = "background", ):
+    def run_code(self, code_str: str, file_path:str =None ,zip_path:str =None, mode: str = "background", ):
         if not code_str:
             return "", "Empty code_str."
 
@@ -83,10 +88,14 @@ class CodeRunner:
                 return out, err
 
             elif mode == "terminal":
-                # ✅ B안 강제: 타이핑 실패 시 조용히 폴백하지 않고 에러로 알려줌
+                # ? B? ??: ??? ?? ? ??? ???? ?? ??? ???
                 log_file = self._run_in_terminal_typing(tmp_file, code_str, title="llm")
                 self.last_meta["log"] = log_file
                 return "", ""
+            elif mode == "git_install":
+                self.file_manager.make_project(file_path)
+            
+            
             else:
                 out, err = self._run_background(tmp_file)
                 self._safe_remove(tmp_file)
@@ -98,11 +107,11 @@ class CodeRunner:
             if mode != "terminal":
                 self._safe_remove(tmp_file)
                 self.last_meta = {"file": None, "log": None}
-            # 터미널 모드에서 실패 원인을 바로 보여줌
+            # ??? ???? ?? ??? ?? ???
             return "", f"[terminal-typing-error] {e}"
 
     def cleanup_last_file(self):
-        """마지막 실행에서 생성된 임시 파일/로그를 정리."""
+        """??? ???? ??? ?? ??/??? ??."""
         self._safe_remove(self.last_meta.get("file"))
         self._safe_remove(self.last_meta.get("log"))
         self.last_meta = {"file": None, "log": None}
@@ -140,6 +149,23 @@ class CodeRunner:
 
 if __name__ == "__main__":
     coder=CodeRunner(host="172.17.0.1",port=9006)
-    coder.run()
-
+    #coder.run()
     
+ 
+    
+    git_url="https://github.com/hesyss0713-crypto/AI_Agent_Model"
+    dir_path="/workspace/"
+    #coder.file_manager.make_project(dir_path="/workspace", git_path=git_url)
+    #file_list=coder.file_manager.get_list_file(dir_path)
+    
+    ##if file is .py
+    python_file="train.py"
+    dir_path="/workspace/AI_Agent_Model/"
+
+
+    coder.file_manager.root=dir_path
+    coder.python=dir_path+"venv/bin/python"
+    coder.file_manager.make_venv(upgrade_deps=False,gitignore=False)
+
+
+    coder._run_background(dir_path+python_file)

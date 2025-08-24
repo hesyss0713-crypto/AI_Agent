@@ -3,7 +3,7 @@ import requests, zipfile, io, os
 from bs4 import BeautifulSoup
 import importlib.util
 import warnings
-
+import base64
 
 class WebManager():
     def __init__(self):
@@ -19,7 +19,7 @@ class WebManager():
     def get_information_web(self,url):
         res = requests.get(url)
         soup = BeautifulSoup(res.text, "lxml")
-        if "git" in url:
+        if "github.com" in url:
             readme_section = soup.select_one("article.markdown-body")
             if readme_section:
                 if readme_section:
@@ -73,7 +73,6 @@ class WebManager():
     
     # default Requiremetns 참조
     def pip_install(self,file_path):
-        
         try:
             if file_path!=None:
                 with open(file_path) as f:
