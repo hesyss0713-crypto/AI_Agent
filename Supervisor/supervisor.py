@@ -76,7 +76,6 @@ class Supervisor():
             "Respond with a single lowercase word only. "
             "If the prompt contains 'code' or 'python', the command must be 'code'."
             "The command must be 'git',if git url is including user prompt. specifically git command means user wanna make a own's project from git repository"
-            "if 'project' in user request, it must be git command "
         )
         temp = [
             {"role": "system", "content": system_cls},
@@ -90,6 +89,60 @@ class Supervisor():
             if cand in norm:
                 return cand
         return "conversation"  # fallback
+
+    def get_dual_reply(self, user_text: str, max_new_tokens: int = 512) -> dict:
+        """
+        Generate two outputs from the model:
+        1) user_reply : natural language for the user
+        2) coder_reply : machine-executable code (if needed), else empty
+        """
+        system_dual = (
+            "You are a dual-response assistant.\n"
+            "For every user request, you must provide TWO outputs:\n"
+            "1. USER_REPLY: A natural language answer to the user (friendly explanation).\n"
+            "2. CODER_REPLY: A machine-executable instruction or code (if needed).\n"
+            "   - If the request is about a function, include both the function definition "
+            "     AND a runnable example call.\n"
+            "   - If no code is needed, leave CODER_REPLY empty.\n\n"
+            "Format your output strictly as JSON with keys 'user_reply' and 'coder_reply'.\n"
+            "Do not escape newlines inside coder_reply. Write actual line breaks instead of '\\n'.\n\n"
+            "Example:\n"
+            "User: '파이썬으로 1부터 5까지 출력하는 코드'\n"
+            "Assistant:\n"
+            "{\n"
+            '  \"user_reply\": \"다음은 1부터 5까지 출력하는 코드입니다.\",\n'
+            '  \"coder_reply\": \"for i in range(1, 6):\\n    print(i)\"\n'
+            "}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_dual},
+            {"role": "user", "content": user_text},
+        ]
+
+        raw_output = self._generate(messages, max_new_tokens=max_new_tokens).strip()
+
+        # ```json ... ``` 감싸져 있으면 제거
+        if raw_output.startswith("```"):
+            raw_output = raw_output.strip("`").lstrip("json").strip()
+
+        try:
+            dual_reply = json.loads(raw_output)
+        except json.JSONDecodeError:
+            # 백슬래시 문제 보정
+            fixed = raw_output.replace("\\n", "\n")
+            try:
+                dual_reply = json.loads(fixed)
+            except Exception:
+                dual_reply = {"user_reply": raw_output, "coder_reply": ""}
+
+        # 필드 보정
+        if "user_reply" not in dual_reply:
+            dual_reply["user_reply"] = ""
+        if "coder_reply" not in dual_reply:
+            dual_reply["coder_reply"] = ""
+
+        return dual_reply
     
     def extract_urls(self, prompt: str) -> str:
         # URL 패턴 정규식 (http, https 포함)
@@ -116,9 +169,10 @@ class Supervisor():
 
                 # 2) 커맨드 분류 (임시 프롬프트 사용)
                 command = self.get_command(text)
+                tmp_ans = self.get_dual_reply(text)
 
                 # 3) 모델 응답 생성 (대화 버퍼 기반)
-                response_text = self.get_output(max_new_token=450)
+                response_text = self.get_output(max_new_token=900)
 
                 if command == "code":
                     code = self.get_code(response_text)
