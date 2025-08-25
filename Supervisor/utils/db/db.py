@@ -1,37 +1,39 @@
-import mysql.connector
-import json
+import psycopg2
+import psycopg2.extras
 
 
 class DBManager:
-    def __init__(self, host="localhost", user="supervisor_user", password="supervisor_pass", database="supervisor_db"):
-        self.conn = mysql.connector.connect(
+    def __init__(self, host='172.17.0.4', user="admin", password="1234", database="Aiagent", port=5432):
+        self.conn = psycopg2.connect(
             host=host,
             user=user,
             password=password,
-            database=database,
-            port=9001
+            dbname=database,
+            port=port
         )
-        # dict 형태로 반환
-        self.cursor = self.conn.cursor(dictionary=True)
+        # dict 형태로 반환 (MySQL dictionary=True 와 동일)
+        self.cursor = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
     # ------------------------------
     # 1. supervisor_logs 관리
     # ------------------------------
     def insert_supervisor_log(self, requester, command, code, prompt, agent_name,
-                              supervisor_reply=None, filename=None, parent_id=None):
+                              supervisor_reply=None, filename=None, parent_id=None, url=None):
         """
         supervisor_logs 테이블에 요청 로그 저장
         """
         sql = """
         INSERT INTO supervisor_logs
-        (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id, url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
         """
-        values = (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id)
+        values = (requester, command, code, prompt, supervisor_reply, filename, agent_name, parent_id, url)
 
         self.cursor.execute(sql, values)
+        new_id = self.cursor.fetchone()["id"]
         self.conn.commit()
-        return self.cursor.lastrowid  # 새 id 반환
+        return new_id  # 새 id 반환
 
     def get_supervisor_log(self, log_id):
         """
@@ -52,12 +54,14 @@ class DBManager:
         INSERT INTO coder_logs
         (log_id, status, output, error_message)
         VALUES (%s, %s, %s, %s)
+        RETURNING id
         """
         values = (log_id, status, output, error_message)
 
         self.cursor.execute(sql, values)
+        new_id = self.cursor.fetchone()["id"]
         self.conn.commit()
-        return self.cursor.lastrowid
+        return new_id
 
     def get_coder_logs(self, log_id):
         """

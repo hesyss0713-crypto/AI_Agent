@@ -9,6 +9,8 @@ class FileManager():
     def __init__(self):
         self.root=None
 
+    
+    ## 가상환경 생성
     def make_venv(
         self,
         relpath: str = "venv",
@@ -17,13 +19,13 @@ class FileManager():
         gitignore: bool = True,
     ) -> dict:
         """
-       
+        venv폴더가 생성이 되어있지않는 경우 생성
         """
         venv_path = (self.root+relpath)
         if not os.path.exists(venv_path):
             os.mkdir(venv_path)
 
-        # 1) ???? ??
+        # /bin 폴더가 존재하지 않는경우 생성
         if not os.path.exists(venv_path+"/bin"):
             if interpreter:
         
@@ -32,7 +34,7 @@ class FileManager():
         
                 venv.create(str(venv_path), with_pip=True, upgrade_deps=upgrade_deps)
 
-
+        ### 현재 agent, Windows, Linux판별
         if os.name == "nt":
             py  = venv_path / "Scripts" / "python.exe"
             pip = venv_path / "Scripts" / "pip.exe"
@@ -42,7 +44,7 @@ class FileManager():
             pip = venv_path +"/bin/pip"
             activate = venv_path+"/bin/activate"
 
-   
+        ### pip 업그레이드 및 pip 설치
         if upgrade_deps:
             response=requests.get("https://bootstrap.pypa.io/get-pip.py")
             output_file="get-pip.py"
@@ -52,10 +54,10 @@ class FileManager():
             subprocess.run([py,"get-pip.py"])
             subprocess.run([str(pip), "install", "-U", "pip", "setuptools", "wheel"], check=True)
 
-
+        ### requirements.txt 설치
         subprocess.run([str(pip), "install", "-r", self.root+"requirements.txt"], text=True, check=True)
     
-
+        ### git ignore 옵션 수정 필요 2025.08.25
         if gitignore:
             gi = self.root / ".gitignore"
             line = f"{relpath}\n"
@@ -72,6 +74,7 @@ class FileManager():
         },
         "stderr": None,
     }
+    
     
     
     def zip_file(self, zip_path:str,folder_path:str, file_path: str):
@@ -104,7 +107,7 @@ class FileManager():
     def get_code(self,path):
         pass
     
-    
+    #폴더 트리구조 + py 파일 넘기기
     def make_project(self, dir_path:str, zip_file:str =None , git_path:str = None):
         if zip_file is not None and git_path is None:
                 with zipfile.ZipFile(zip_file) as z:
@@ -117,7 +120,9 @@ class FileManager():
             git_name=git_path.split("/")[-1]
             self.root=os.chdir(dir_path+git_name)
             print("Clone a git repository")
-    
+            
+   
+   
     def delete_file(self,file_path):
         file_name=file_path.split('/')[-1]
         try:
@@ -128,5 +133,5 @@ class FileManager():
         except Exception as e:
             print(e)
             return {"stdout": None , "stderr":str(e)}
-   
+    
     

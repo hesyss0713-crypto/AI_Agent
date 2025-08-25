@@ -3,7 +3,7 @@ import json
 import threading
 
 class SupervisorServer:
-    def __init__(self, host="0.0.0.0", port=9001):
+    def __init__(self, host="0.0.0.0", port=9002):
         self.host = host
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -30,6 +30,7 @@ class SupervisorServer:
         try:
             while True:
                 data = self.conn.recv(4096)
+
                 task_data = json.loads(data.decode())
                 print(f"[Supervisor] Received: {task_data}", flush=True)
 
