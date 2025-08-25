@@ -154,12 +154,13 @@ class Supervisor():
     def run_supervisor(self):
         try:
             self.socket.run_main()
+            print("[Supervisor] 무엇을 도와드릴까요?")
             while True:
                 code = None
                 url = None
                 filename = None            
 
-                text = input("[Supervisor] 무엇을 도와드릴까요? ")
+                text = input()
                 if text.lower() == "exit":
                     print("[Supervisor] 종료")
                     break
