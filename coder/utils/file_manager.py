@@ -105,7 +105,14 @@ class FileManager():
             return {"stdout": None , "stderr":str(e)}
     
     def get_code(self,path):
-        pass
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return {"stdout": content , "stderr": None}
+        except FileNotFoundError:
+            return {"stdout": None , "stderr":str(e)}
+        except Exception as e:
+            return {"stdout": None , "stderr":str(e)}
     
     #폴더 트리구조 + py 파일 넘기기
     def make_project(self, dir_path:str, zip_file:str =None , git_path:str = None):

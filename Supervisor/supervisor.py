@@ -15,19 +15,45 @@ class Supervisor():
         # 대화 메시지 버퍼: system 1개로 시작 (이후 add_message로만 관리)
         self.default_system_content = "You are a helpful assistant."
         self.messages = [{"role": "system", "content": self.default_system_content}]
-
+        self.loop_range=4
         self.socket = supervisor_socket.SupervisorServer(host, port)
         # self.db = DBManager()
         self.web_manager = WebManager()
 
-    
+    # observer 패턴 socket의 메세지 등록
     def on_message(self,data):
         print("[Main] got message:", data)
+        '''
+          result = {
+            "status": "success" if not error else "error",
+            "task_id": message.get("id"),
+            "output": output,
+            "error": error,
+        }
+        '''
+        if data["error"]!=None and self.loop_range!=0:
+            self.add_message("user", data["error"])
+            # 2) 커맨드 분류 (임시 프롬프트 사용)
+            command = self.get_command(data["error"])
 
- 
-
-
-
+            # 3) 모델 응답 생성 (대화 버퍼 기반)
+            response_text = self.get_output(max_new_token=450)
+            code = self.get_code(response_text)
+            self.add_message("assistant", response_text)
+            
+            result = {
+                "command": command,
+                "code": code,
+                "response_text": response_text,
+                #"log_id": log_id,
+                "filename" : None,
+                "url" : None
+            }
+            print(result)
+            self.socket.send_supervisor_response(json.dumps(result).encode())
+            self.loop_range-=1
+        else:
+            self.loop_range=4
 
     # ===== 모델 로드 =====
     def load_model(self) -> None:
@@ -161,6 +187,9 @@ class Supervisor():
                     url = url
                 )
                 '''
+                ## test_case
+                filename="/workspace/AI_Agent_Model/model.py"
+                url=None
                 # 7) 결과 출력/전송
                 result = {
                     "command": command,

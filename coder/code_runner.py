@@ -145,19 +145,18 @@ if __name__ == "__main__":
     
  
     
-    git_url="https://github.com/hesyss0713-crypto/AI_Agent_Model"
-    dir_path="/workspace/"
-    #coder.file_manager.make_project(dir_path="/workspace", git_path=git_url)
-    #file_list=coder.file_manager.get_list_file(dir_path)
+    # git_url="https://github.com/hesyss0713-crypto/AI_Agent_Model"
+    # dir_path="/workspace/"
+    # coder.file_manager.make_project(dir_path="/workspace", git_path=git_url)
+    # file_list=coder.file_manager.get_list_file(dir_path)
     
-    ##if file is .py
-    python_file="train.py"
-    dir_path="/workspace/AI_Agent_Model/"
+    # #if file is .py
+  
 
+    # coder.file_manager.root=dir_path
+    # coder.python=dir_path+"venv/bin/python"
+    # coder.file_manager.make_venv(upgrade_deps=False,gitignore=False)
 
-    coder.file_manager.root=dir_path
-    coder.python=dir_path+"venv/bin/python"
-    coder.file_manager.make_venv(upgrade_deps=False,gitignore=False)
-
-
-    coder._run_background(dir_path+python_file)
+    # python_file="train.py"
+    # dir_path="/workspace/AI_Agent_Model/"
+    # coder._run_background(dir_path+python_file)
