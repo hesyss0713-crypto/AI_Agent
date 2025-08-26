@@ -41,18 +41,11 @@ class CodeRunner:
         self.coder_socket.on_message_callback = self.event_message
         self.file_manager=file_manager.FileManager()
 
-    def agent_unzip(self, zip_file):
-        pass
-    
-    def agent_zip(self, zip_file):
-        pass
     # ---------------- Public API ---------------- #
     def event_message(self,message):
         # 2. task 실행
         code_str = message['code']
-        
         # file_str = message['file']
-        
         output, error = self.run_code(code_str)
         
         # 3. 실행 결과 SUpervisor에 회신
