@@ -20,6 +20,15 @@ class Supervisor():
         # self.db = DBManager()
         self.web_manager = WebManager()
 
+    
+    def on_message(self,data):
+        print("[Main] got message:", data)
+
+ 
+
+
+
+
     # ===== 모델 로드 =====
     def load_model(self) -> None:
         try:
@@ -173,5 +182,6 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     port = 9006
     supervisor = Supervisor(model_name, host, port)
+    supervisor.socket.on("message", supervisor.on_message)
     supervisor.load_model()
     supervisor.run_supervisor()
