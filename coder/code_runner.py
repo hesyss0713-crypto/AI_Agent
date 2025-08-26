@@ -44,17 +44,18 @@ class CodeRunner:
     # ---------------- Public API ---------------- #
     def event_message(self,message):
         # 2. task 실행
-        code_str = message['code']
+        action = message['action']
+        url = message['url']
         # file_str = message['file']
-        output, error = self.run_code(code_str)
+        result= self.run_code(action,url)
         
         # 3. 실행 결과 SUpervisor에 회신
-        result = {
-            "status": "success" if not error else "error",
-            "task_id": message.get("id"),
-            "output": output,
-            "error": error,
-        }
+        # result = {
+        #     "status": "success" if not error else "error",
+        #     "task_id": message.get("id"),
+        #     "output": output,
+        #     "error": error,
+        # }
         self.coder_socket.send_message(result)
     
     def run(self):
@@ -65,29 +66,43 @@ class CodeRunner:
         
         
     ## Require supervisor send format edit
-    ## def run_code(self, code_str: str, mode: str = "background", ):
-    def run_code(self, code_str: str, file_path:str =None ,zip_path:str =None, mode: str = "background", ):
-        if not code_str:
-            return "", "Empty code_str."
+    def run_code(self, action: str, url :str , dir_path : str ="/workspace/" ):
+        if not action:
+            return "", "Empty action."
 
-        tmp_file = self._save_to_temp_file(code_str)
-        self.last_meta = {"file": tmp_file, "log": None}
+        # tmp_file = self._save_to_temp_file(code_str)
+        # self.last_meta = {"file": tmp_file, "log": None}
 
         try: 
-            if mode == "background":
+            if action == "background":
                 out, err = self._run_background(tmp_file)
                 self._safe_remove(tmp_file)
                 self.last_meta = {"file": None, "log": None}
                 return out, err
 
-            elif mode == "terminal":
+            elif action == "terminal":
                 # 터미널 모드에서 실패 원인을 바로 보여줌
                 log_file = self._run_in_terminal_typing(tmp_file, code_str, title="llm")
                 self.last_meta["log"] = log_file
                 return "", ""
-            elif mode == "git_install":
-                self.file_manager.make_project(file_path)
             
+            elif action == "clone_repo":
+
+                
+                self.file_manager.make_project(dir_path="/workspace/", git_path=url)
+                #self.file_manager.make_venv(upgrade_deps=False,gitignore=False)
+                git_repo=url.split('/')[-1]
+                
+                file_list=self.file_manager.get_list_file("/workspace/"+git_repo)
+                
+                
+                file_content=self.file_manager.get_file_list_content(file_list)
+                return {
+                        "action": "clone_repo",
+                        "repo": git_repo,
+                        "file_list": file_list,
+                        "file_content": file_content,
+                    }
             
             else:
                 out, err = self._run_background(tmp_file)
@@ -97,7 +112,7 @@ class CodeRunner:
                 return out, err
 
         except Exception as e:
-            if mode != "terminal":
+            if action != "terminal":
                 self._safe_remove(tmp_file)
                 self.last_meta = {"file": None, "log": None}
             return "", f"[terminal-typing-error] {e}"
@@ -140,8 +155,8 @@ class CodeRunner:
         
 
 if __name__ == "__main__":
-    coder=CodeRunner(host="172.17.0.1",port=9006)
-    #coder.run()
+    coder=CodeRunner(host="172.17.0.1",port=9002)
+    coder.run()
     
  
     
@@ -156,7 +171,6 @@ if __name__ == "__main__":
     # coder.file_manager.root=dir_path
     # coder.python=dir_path+"venv/bin/python"
     # coder.file_manager.make_venv(upgrade_deps=False,gitignore=False)
-
     # python_file="train.py"
     # dir_path="/workspace/AI_Agent_Model/"
     # coder._run_background(dir_path+python_file)

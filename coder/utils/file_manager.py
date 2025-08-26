@@ -95,17 +95,100 @@ class FileManager():
         except Exception as e:
             return {"stdout": None, "stderr": str(e)}
     
-    def get_list_file(self,dir_path:str):
+    def get_list_file(self,git_path: str):
         try:
-            entries=os.scandir(dir_path)
-            
-            return {"stdout": entries , "stderr": None}
+            file_list = []
+            with os.scandir(git_path) as entries:
+                for entry in entries:
+                    file_list.append({
+                        "name": entry.name,
+                        "path": entry.path,
+                        "is_dir": entry.is_dir()
+                    })
+            return {"stdout": file_list, "stderr": None}
         except Exception as e:
-            print(e)
-            return {"stdout": None , "stderr":str(e)}
+            return {"stdout": None, "stderr": str(e)}
     
-    def get_code(self,path):
+    
+    
+    def get_projects(self,workspace_path: str):
         try:
+            projects = []
+            with os.scandir(workspace_path) as entries:
+                for entry in entries:
+                    if entry.is_dir():
+                        projects.append({
+                            "name": entry.name,
+                            "path": entry.path
+                        })
+            return {"stdout": projects, "stderr": None}
+        except Exception as e:
+            return {"stdout": None, "stderr": str(e)}
+    
+    def update_file_content(self,path: str, old: str, new: str, replace_all: bool = True):
+        """
+        파일 내용을 읽어서 특정 문자열(old)을 new로 교체 후 저장하는 함수
+        """
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            if replace_all:
+                updated = content.replace(old, new)  # 모든 부분 수정
+            else:
+                updated = content.replace(old, new, 1)  # 첫 번째만 수정
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(updated)
+
+            return True, "Update successful"
+        except Exception as e:
+            return False, str(e)
+    
+    
+    def get_file_list_content(self, file_list):
+        try:
+            projects = file_list.get("stdout")
+            if not projects:
+                return {"stdout": None, "stderr": "No projects found"}
+
+            content_list = []
+            for project in projects:
+                project_path = project["path"]
+
+                # 1) 이미 파일인 경우
+                if os.path.isfile(project_path) and project_path.endswith(".py"):
+                    with open(project_path, "r", encoding="utf-8") as f:
+                        content_list.append({
+                            "path": project_path,
+                            "content": f.read()
+                        })
+                    continue
+
+                # 2) 디렉토리인 경우
+                if os.path.isdir(project_path):
+                    for root, _, files in os.walk(project_path):
+                        for name in files:
+                            if name.strip().lower().endswith(".py"):
+                                file_path = os.path.join(root, name)
+                                with open(file_path, "r", encoding="utf-8") as f:
+                                    content_list.append({
+                                        "path": file_path,
+                                        "content": f.read()
+                                    })
+
+            return {"stdout": content_list, "stderr": None}
+
+        except Exception as e:
+            return {"stdout": None, "stderr": str(e)}
+
+
+
+    
+    
+    def get_file_content(self,path):
+        try:
+            path=self.root+path
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
             return {"stdout": content , "stderr": None}
@@ -123,7 +206,7 @@ class FileManager():
                     z.extractall(dir_path+"zip_file")  
         if zip_file is None and git_path is not None:
             os.chdir(dir_path)
-            os.system(f"git clone {url}")
+            os.system(f"git clone {git_path}")
             git_name=git_path.split("/")[-1]
             self.root=os.chdir(dir_path+git_name)
             print("Clone a git repository")
