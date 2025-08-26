@@ -64,6 +64,48 @@ class Supervisor():
     # ===== system prompt 선택 =====
     def get_system_prompt(self, command: str) -> str:
         return self.prompts.get(command, self.prompts["conversation"])
+    
+    def handle_setup(self, coder_input: dict):
+        """setup 단계: requirements 설치는 생략하고 바로 실행 준비"""
+        setup_prompt = self.get_system_prompt("setup")
+
+        messages = [
+        {"role": "system", "content": setup_prompt},
+        {"role": "user", "content": json.dumps(coder_input)}            
+        ]
+
+        raw_plan = self._generate(messages, max_new_tokens=300).strip()
+        print("[Supervisor] Setup plan generated:\n", raw_plan)    
+            
+        files = coder_input.get("files", [])
+        if not files:
+            print("[Supervisor] 파일이 없습니다.")
+            return
+
+        # 1. 준비 완료 메시지
+        print("[Supervisor] 프로젝트 준비 완료. 실행을 시작합니다.")
+        
+        # # 2. DB에도 저장
+        # self.db.insert_supervisor_log(
+        #     requester="user1",
+        #     command="setup",
+        #     code=None,
+        #     prompt="setup 단계",
+        #     supervisor_reply="프로젝트 준비가 완료되었습니다. 학습을 시작합니다.",
+        #     filename=None,
+        #     agent_name="setup-agent",
+        #     url=None
+        #     )
+
+        # 3. 실행 task 전송 (예: train.py 있으면 실행)
+        for f in files:
+            if f["filename"] == "train.py":
+                task = {
+                    "action": "run",
+                    "target": f["filename"]
+                }
+                print(task)
+                print(f"[Supervisor] Coder에게 {f['filename']} 실행 요청")
 
     # ===== 실행 루프 =====
     def run_supervisor(self):
@@ -102,27 +144,123 @@ class Supervisor():
                         print("[Supervisor] 프로젝트 진행을 취소합니다.")
                         continue
 
-                    # DB 저장
-                    self.db.insert_supervisor_log(
-                        requester="user1",
-                        command="git",
-                        code=None,
-                        prompt=text,
-                        supervisor_reply=project_summary,
-                        filename=None,
-                        agent_name="giter",
-                        url=url
-                    )
+                    # # DB 저장
+                    # self.db.insert_supervisor_log(
+                    #     requester="user1",
+                    #     command="git",
+                    #     code=None,
+                    #     prompt=text,
+                    #     supervisor_reply=project_summary,
+                    #     filename=None,
+                    #     agent_name="giter",
+                    #     url=url
+                    # )
                     print("[Supervisor] 프로젝트 확인 완료. 다음 단계: setup")
                     task ={
                         "action" : "clone_repo",
                         "url" : url
                     }
 
-                    msg = json.dump(task) + "\n"
-                    self.socket.send_supervisor_response(msg.encode())
+                    # msg = json.dump(task) + "\n"
+                    # self.socket.send_supervisor_response(msg.encode())
                     print(f"[Supervisor] Coder에게 git clone 요청 : {url}")
+                    
+                    coder_input = {
+                        "files": [
+                            {
+                                "filename": "model.py",
+                                "content": """\
+                    import torch
+                    import torch.nn as nn
 
+                    class SimpleMLP(nn.Module):
+                        def __init__(self, input_dim=784, hidden_dim=128, output_dim=10):
+                            super(SimpleMLP, self).__init__()
+                            self.layers = nn.Sequential(
+                                nn.Linear(input_dim, hidden_dim),
+                                nn.ReLU(),
+                                nn.Linear(hidden_dim, output_dim)
+                            )
+                        
+                        def forward(self, x):
+                            return self.layers(x)
+                    """,
+                                "language": "python",
+                                "type": "code"
+                            },
+                            {
+                                "filename": "train.py",   
+                                "content": """\
+                    import torch
+                    import torch.nn as nn
+                    import torch.optim as optim
+                    from torchvision import datasets, transforms
+                    from torch.utils.data import DataLoader
+
+                    from model import SimpleMLP
+
+                    # 하이퍼파라미터
+                    batch_size = 64
+                    lr = 0.001
+                    epochs = 5
+
+                    # 데이터셋 (MNIST 예시)
+                    transform = transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Lambda(lambda x: x.view(-1))  # (1,28,28) -> (784,)
+                    ])
+
+                    train_dataset = datasets.MNIST(root="./data", train=True, transform=transform, download=True)
+                    test_dataset = datasets.MNIST(root="./data", train=False, transform=transform, download=True)
+
+                    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+                    test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+                    # 모델/손실/최적화기
+                    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    model = SimpleMLP().to(device)
+                    criterion = nn.CrossEntropyLoss()
+                    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+                    # 학습 루프
+                    for epoch in range(epochs):
+                        model.train()
+                        total_loss = 0
+                        for x, y in train_loader:
+                            x, y = x.to(device), y.to(device)
+
+                            optimizer.zero_grad()
+                            preds = model(x)
+                            loss = criterion(preds, y)
+                            loss.backward()
+                            optimizer.step()
+
+                            total_loss += loss.item()
+
+                        print(f"Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(train_loader):.4f}")
+
+                    # 평가
+                    model.eval()
+                    correct, total = 0, 0
+                    with torch.no_grad():
+                        for x, y in test_loader:
+                            x, y = x.to(device), y.to(device)
+                            preds = model(x)
+                            predicted = preds.argmax(dim=1)
+                            correct += (predicted == y).sum().item()
+                            total += y.size(0)
+
+                    print(f"Test Accuracy: {100*correct/total:.2f}%")
+                    """,
+                                "language": "python",
+                                "type": "code"
+                            }
+                        ]
+                    }
+                    self.handle_setup(coder_input)
+                        
+                            
+                        
 
 
         except Exception as e:

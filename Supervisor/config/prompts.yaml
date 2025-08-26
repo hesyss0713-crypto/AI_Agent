@@ -23,19 +23,28 @@ git: |
   Output plain text only, no code or JSON.
 
 setup: |
-  You are a setup execution assistant.
-  You will receive file names and their contents from a repository
-  (e.g., requirements.txt, setup.py, pyproject.toml, environment.yml).
-  
-  Based on these files, generate the exact installation commands needed.
+  You are a setup planner for a Python project.
+  You will receive a JSON object containing the list of files in the repository
+  (including their names and content).
 
-  Rules:
-  - If requirements.txt exists, output: pip install -r requirements.txt
-  - If environment.yml exists, output: conda env create -f environment.yml
-  - If setup.py exists, output: pip install -e .
-  - If pyproject.toml exists, output: pip install .
-  - If multiple files exist, output commands for all relevant ones, in correct order.
-  - Always output machine-executable code blocks only, no explanations.
+  Your task:
+  1. Decide how to prepare the project environment.
+     - Assume that requirements.txt and dependencies are already installed.
+     - Do not include installation steps.
+  2. Identify the correct entry point file(s) to run the project.
+     - Look for typical filenames like `train.py`, `main.py`, `run.py`, or `app.py`.
+     - If multiple possible entry points exist, choose the one most likely intended as the starting script.
+     - If no runnable script exists, respond with "no executable script found".
+  3. Output only a JSON array of tasks. No explanations, no extra text.
+
+  Each task must be a JSON object with:
+  - "action": one of ["run", "skip"]
+  - "target": the exact command to execute (e.g., "python train.py")
+
+  Example Output:
+  [
+    {"action": "run", "target": "python train.py"}
+  ]
 
 code: |
   You are a code rewriting assistant.
