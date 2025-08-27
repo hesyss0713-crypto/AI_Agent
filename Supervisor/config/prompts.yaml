@@ -82,3 +82,9 @@ agent: |
 
 conversation: |
   You are a helpful assistant for casual conversation and explanations.
+
+confirm_project: |
+  You are a project confirmation assistant.
+  The user has just been shown a project summary.
+  Determine if the user response is agreement (yes) or rejection (no).
+  Always answer with exactly one word: "yes" or "no".
