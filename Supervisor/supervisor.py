@@ -3,6 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import re, logging, json, yaml
 from utils.db.db import DBManager
 from utils.web.web_manager import WebManager
+import yaml
 
 logging.basicConfig(level=logging.INFO)
 
@@ -46,6 +47,12 @@ class Supervisor():
         output_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
         output_ids = [out[len(inp):] for inp, out in zip(inputs.input_ids, output_ids)]
         return self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0]
+    
+    # ==== Yaml load ====
+    def load_config(self, path):
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
 
     # ===== command 분류 =====
     def get_command(self, user_text: str) -> str:
@@ -61,6 +68,96 @@ class Supervisor():
                 return cand
         return "conversation"
 
+    # ===== 모델 구조 설명 ====
+    def summarize_experiment_with_llm(self, coder_input: dict) -> dict:
+        """
+        coder_input(dict)를 받아 LLM에게 요약을 요청.
+        prompts.yaml의 summarize_experiment 프롬프트를 system으로 먹이고
+        files 내용을 user message로 전달.
+        
+        반환:
+        {"system_summary": str, "user_summary": str}
+        """
+        # 파일 리스트 꺼내기
+        files = coder_input.get("coder_message", {}).get("metadata", {}).get("files", [])
+        
+        # 파일들 하나로 합치기
+        merged_code = "\n\n".join(
+            [f"### {f['filename']}\n{f['content']}" for f in files]
+        )
+        
+        # 메시지 구성
+        messages = [
+            {"role": "system", "content": self.prompts["summarize_experiment"]},
+            {"role": "user", "content": merged_code}
+        ]
+        
+        # LLM 호출
+        raw_summary = self._generate(messages, max_new_tokens=256)
+        
+        # 결과 파싱
+        sys_part, user_part = "", ""
+        if "[User Summary]" in raw_summary:
+            parts = raw_summary.split("[User Summary]")
+            sys_part = parts[0].replace("[System Summary]", "").strip()
+            user_part = parts[1].strip()
+        else:
+            sys_part = raw_summary.strip()
+            user_part = "No explicit User Summary found."
+        
+        return {
+            "system_summary": sys_part,
+            "user_summary": user_part
+        }
+
+    # ==== edit_code 부분 =====
+    def generate_edit_task(self, user_input: str, experiment: dict) -> dict:
+        """
+        유저 입력과 experiment 코드(files)를 기반으로
+        LLM에게 수정된 전체 코드들을 받아와서
+        Coder에 전달할 task JSON으로 만든다.
+        """
+        files = experiment.get("coder_message", {}).get("metadata", {}).get("files", [])
+        
+        # 메시지 구성: 파일들을 각각 분리해서 전달
+        messages = [
+            {"role": "system", "content": self.prompts["edit"]},
+            {"role": "user", "content": f"User request: {user_input}"}
+        ]
+        
+        for f in files:
+            messages.append(
+                {"role": "user", "content": f"### {f['filename']}\n{f['content']}"}
+            )
+        
+        # LLM 호출 → 수정된 코드 블록들 반환 (파일별 구분은 ### filename)
+        raw_output = self._generate(messages, max_new_tokens=2048)
+        
+        # 파싱: 파일별로 코드 나누기
+        result = {}
+        current_file = None
+        buffer = []
+        
+        for line in raw_output.splitlines():
+            if line.startswith("### "):
+                if current_file and buffer:
+                    result[current_file] = "\n".join(buffer).strip()
+                    buffer = []
+                current_file = line.replace("### ", "").strip()
+            else:
+                buffer.append(line)
+        
+        if current_file and buffer:
+            result[current_file] = "\n".join(buffer).strip()
+        
+        task = {
+            "action": "edit",
+            "target": list(result.keys()),
+            "metadata": result
+        }
+        
+        return task
+    
     # ===== system prompt 선택 =====
     def get_system_prompt(self, command: str) -> str:
         return self.prompts.get(command, self.prompts["conversation"])
@@ -165,102 +262,14 @@ class Supervisor():
                     # self.socket.send_supervisor_response(msg.encode())
                     print(f"[Supervisor] Coder에게 git clone 요청 : {url}")
                     
-                    coder_input = {
-                        "files": [
-                            {
-                                "filename": "model.py",
-                                "content": """\
-                    import torch
-                    import torch.nn as nn
+                    coder_input = self.load_config("/workspace/AI_Agent/Supervisor/config/experiment.yaml")
+                    coder_input = coder_input["file_content"]
+                    model_summary = self.summarize_experiment_with_llm(coder_input)
+                    print(model_summary)
 
-                    class SimpleMLP(nn.Module):
-                        def __init__(self, input_dim=784, hidden_dim=128, output_dim=10):
-                            super(SimpleMLP, self).__init__()
-                            self.layers = nn.Sequential(
-                                nn.Linear(input_dim, hidden_dim),
-                                nn.ReLU(),
-                                nn.Linear(hidden_dim, output_dim)
-                            )
-                        
-                        def forward(self, x):
-                            return self.layers(x)
-                    """,
-                                "language": "python",
-                                "type": "code"
-                            },
-                            {
-                                "filename": "train.py",   
-                                "content": """\
-                    import torch
-                    import torch.nn as nn
-                    import torch.optim as optim
-                    from torchvision import datasets, transforms
-                    from torch.utils.data import DataLoader
-
-                    from model import SimpleMLP
-
-                    # 하이퍼파라미터
-                    batch_size = 64
-                    lr = 0.001
-                    epochs = 5
-
-                    # 데이터셋 (MNIST 예시)
-                    transform = transforms.Compose([
-                        transforms.ToTensor(),
-                        transforms.Lambda(lambda x: x.view(-1))  # (1,28,28) -> (784,)
-                    ])
-
-                    train_dataset = datasets.MNIST(root="./data", train=True, transform=transform, download=True)
-                    test_dataset = datasets.MNIST(root="./data", train=False, transform=transform, download=True)
-
-                    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-                    test_loader = DataLoader(test_dataset, batch_size=batch_size)
-
-                    # 모델/손실/최적화기
-                    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                    model = SimpleMLP().to(device)
-                    criterion = nn.CrossEntropyLoss()
-                    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-                    # 학습 루프
-                    for epoch in range(epochs):
-                        model.train()
-                        total_loss = 0
-                        for x, y in train_loader:
-                            x, y = x.to(device), y.to(device)
-
-                            optimizer.zero_grad()
-                            preds = model(x)
-                            loss = criterion(preds, y)
-                            loss.backward()
-                            optimizer.step()
-
-                            total_loss += loss.item()
-
-                        print(f"Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(train_loader):.4f}")
-
-                    # 평가
-                    model.eval()
-                    correct, total = 0, 0
-                    with torch.no_grad():
-                        for x, y in test_loader:
-                            x, y = x.to(device), y.to(device)
-                            preds = model(x)
-                            predicted = preds.argmax(dim=1)
-                            correct += (predicted == y).sum().item()
-                            total += y.size(0)
-
-                    print(f"Test Accuracy: {100*correct/total:.2f}%")
-                    """,
-                                "language": "python",
-                                "type": "code"
-                            }
-                        ]
-                    }
-                    self.handle_setup(coder_input)
-                        
-                            
-                        
+                    edit_input = input("수정할 내용을 입력해주세요.")
+                    edit_result = self.generate_edit_task(edit_input, coder_input)
+                    print(edit_result)
 
 
         except Exception as e:

@@ -7,3 +7,4 @@ supervisor_message_schema:
 coder_message_schema:
   result: ""        
   metadata: null      # 선택, 세부 옵션 없으면 null
+ 
