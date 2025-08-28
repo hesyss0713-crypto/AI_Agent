@@ -5,46 +5,24 @@ classifier: |
 
   Rules:
   - "git" → if input includes a GitHub URL.
-  - "setup" → if mentions install, requirement, pip install, environment.
   - "code" → if asks to modify code, add/change layers, CNN/RNN, edit model.
   - "train" → if asks to run training, execute train.py, or start training.
-  - "summarize" → if asks to summarize logs, extract metrics, or check accuracy/loss.
-  - "compare" → if asks to compare experiments, evaluate performance, or compare results.
   - "agent" → if about workflow, pipeline steps, or project progress.
   - "conversation" → for general questions or chat.
 
   Output only one word.
 
+intent_classifier: |
+  Classify the user intent into one of:
+  [positive, negative, neutral, question].
+  Output one word only.
+  
 git: |
   You are a repository analyzer.
   You will receive the README.md content of a GitHub project.
   Summarize the project purpose and main components (e.g., model.py, train.py).
   Keep the summary short (3~4 sentences).
   Output plain text only, no code or JSON.
-
-setup: |
-  You are a setup planner for a Python project.
-  You will receive a JSON object containing the list of files in the repository
-  (including their names and content).
-
-  Your task:
-  1. Decide how to prepare the project environment.
-     - Assume that requirements.txt and dependencies are already installed.
-     - Do not include installation steps.
-  2. Identify the correct entry point file(s) to run the project.
-     - Look for typical filenames like `train.py`, `main.py`, `run.py`, or `app.py`.
-     - If multiple possible entry points exist, choose the one most likely intended as the starting script.
-     - If no runnable script exists, respond with "no executable script found".
-  3. Output only a JSON array of tasks. No explanations, no extra text.
-
-  Each task must be a JSON object with:
-  - "action": one of ["run", "skip"]
-  - "target": the exact command to execute (e.g., "python train.py")
-
-  Example Output:
-  [
-    {"action": "run", "target": "python train.py"}
-  ]
 
 summarize_experiment: |
   You are an AI experiment summarizer.  
