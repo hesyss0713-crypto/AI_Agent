@@ -1,15 +1,15 @@
-import os
-import zipfile
 import subprocess
+import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
+import shutil
+
 from utils.handler_registry import register
 
 class FileManager:
     def __init__(self, root: str | None = None):
         self.root = Path(root) if root else None
 
-    # --------------------- helpers --------------------- #
     @staticmethod
     def _ok(stdout: Any) -> Dict[str, Any]:
         return {"stdout": stdout, "stderr": None}
@@ -18,7 +18,21 @@ class FileManager:
     def _err(msg: str) -> Dict[str, Any]:
         return {"stdout": None, "stderr": msg}
 
-    # --------------------- actions --------------------- #
+    def _run(self, cmd: list[str], cwd: Path | None = None) -> Dict[str, Any]:
+        try:
+            result = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
+            if result.returncode == 0:
+                return self._ok(result.stdout.strip())
+            return self._err(result.stderr.strip() or f"returncode={result.returncode}")
+        except Exception as e:
+            return self._err(str(e))
+
+    def _git(self, repo_path: str, *args: str) -> Dict[str, Any]:
+        p = Path(repo_path)
+        if not p.exists():
+            return self._err(f"Path not found: {repo_path}")
+        return self._run(["git", *args], cwd=p)
+
     @register("clone_repo")
     def clone_repo(self, dir_path: str, git_url: str) -> Dict[str, Any]:
         try:
@@ -31,6 +45,21 @@ class FileManager:
             return self._ok({"repo": repo_name, "path": str(work / repo_name)})
         except Exception as e:
             return self._err(str(e))
+
+    @register("clone_repo_and_scan")
+    def clone_repo_and_scan(self, dir_path: str, git_url: str) -> Dict[str, Any]:
+        cloned = self.clone_repo(dir_path, git_url)
+        if cloned.get("stderr"):
+            return cloned
+        repo_path = cloned["stdout"]["path"]
+        files = self.list_files(repo_path)
+        py = self.read_py_files(repo_path)
+        return self._ok({
+            "repo": cloned["stdout"]["repo"],
+            "path": repo_path,
+            "file_list": files,
+            "py_files": py,
+        })
 
     @register("list_files")
     def list_files(self, path: str) -> Dict[str, Any]:
@@ -92,7 +121,6 @@ class FileManager:
                 p.unlink(missing_ok=True)
                 return self._ok(f"Deleted file: {path}")
             if p.is_dir():
-                # 안전하게 빈 디렉토리만 삭제
                 try:
                     p.rmdir()
                     return self._ok(f"Deleted empty dir: {path}")
@@ -101,3 +129,62 @@ class FileManager:
             return self._err("Path does not exist.")
         except Exception as e:
             return self._err(str(e))
+
+    @register("git_status")
+    def git_status(self, repo_path: str) -> Dict[str, Any]:
+        return self._git(repo_path, "status", "-b", "--porcelain")
+
+    @register("git_current_branch")
+    def git_current_branch(self, repo_path: str) -> Dict[str, Any]:
+        return self._git(repo_path, "rev-parse", "--abbrev-ref", "HEAD")
+
+    @register("git_list_branches")
+    def git_list_branches(self, repo_path: str) -> Dict[str, Any]:
+        return self._git(repo_path, "branch", "--list")
+
+    @register("git_fetch")
+    def git_fetch(self, repo_path: str, remote: str = "origin") -> Dict[str, Any]:
+        return self._git(repo_path, "fetch", remote)
+
+    @register("git_pull")
+    def git_pull(self, repo_path: str, remote: str = "origin", branch: str = "main") -> Dict[str, Any]:
+        return self._git(repo_path, "pull", remote, branch)
+
+    @register("git_checkout")
+    def git_checkout(self, repo_path: str, ref: str, create: bool = False) -> Dict[str, Any]:
+        args = ["checkout"]
+        if create:
+            args += ["-b", ref]
+        else:
+            args += [ref]
+        return self._git(repo_path, *args)
+
+    @register("git_add")
+    def git_add(self, repo_path: str, paths: List[str] | None = None) -> Dict[str, Any]:
+        args = ["add"] + (paths if paths else ["-A"])
+        return self._git(repo_path, *args)
+
+    @register("git_commit")
+    def git_commit(self, repo_path: str, message: str) -> Dict[str, Any]:
+        if not message:
+            return self._err("commit message is empty")
+        return self._git(repo_path, "commit", "-m", message)
+
+    @register("git_push")
+    def git_push(self, repo_path: str, remote: str = "origin", branch: str = "main", set_upstream: bool = False) -> Dict[str, Any]:
+        args = ["push", remote, branch]
+        if set_upstream:
+            args.insert(1, "-u")
+        return self._git(repo_path, *args)
+
+    @register("git_config")
+    def git_config(self, repo_path: str, user_name: str | None = None, user_email: str | None = None) -> Dict[str, Any]:
+        p = Path(repo_path)
+        if not p.exists():
+            return self._err(f"Path not found: {repo_path}")
+        outs = []
+        if user_name:
+            outs.append(self._run(["git", "config", "user.name", user_name], cwd=p))
+        if user_email:
+            outs.append(self._run(["git", "config", "user.email", user_email], cwd=p))
+        return self._ok([o for o in outs])
