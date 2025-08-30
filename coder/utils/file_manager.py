@@ -19,92 +19,104 @@ class FileManager:
     def _err(msg: str) -> Dict[str, Any]:
         return {"stdout": None, "stderr": msg}
 
-    
-    
     @register("create_venv")
-    def create_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def create_venv(
+        self,
+        dir_path: str,
+        venv_name: str = "venv",
+        requirements: str | None = None,
+        upgrade_deps: bool = True,
+        python_version: str | None = None,
+        interpreter: str | None = None
+    ) -> Dict[str, Any]:
         """
-        metadata:
-        - dir_path (str, 필수): 프로젝트 경로
-        - venv_name (str, 선택): 가상환경 폴더명 (기본 '.venv')
-        - requirements (str, 선택): requirements.txt 경로(상대/절대 모두 허용)
-        - upgrade_deps (bool, 선택): pip/setuptools 업그레이드 여부 (기본 True)
-        - python_version (str, 선택): '3.10', '3.11' 같이 원하는 메이저.마이너 버전
-        - interpreter (str, 선택): 사용할 파이썬 실행 파일(명령) 경로/이름 (예: '/usr/bin/python3.10', 'py -3.10')
+        가상환경 생성 (존재하면 재사용)
         """
         try:
-            dir_path = metadata.get("dir_path")
-            if not dir_path:
-                return self._err("Required: metadata.dir_path")
-
-            venv_name      = metadata.get("venv_name", ".venv")
-            requirements   = metadata.get("requirements")
-            upgrade_deps   = bool(metadata.get("upgrade_deps", True))
-            python_version = metadata.get("python_version")  # e.g. "3.10"
-            explicit_interp= metadata.get("interpreter")     # full path or command
-
             project_dir = Path(dir_path).expanduser().resolve()
             project_dir.mkdir(parents=True, exist_ok=True)
             venv_path = project_dir / venv_name
 
-            # -------- 인터프리터 해석 로직 --------
-            def _resolve_interpreter(version: str | None, explicit: str | None) -> list[str]:
-                # 1) 명시된 interpreter 우선
-                if explicit:
-                    # 공백이 포함될 수 있으니 토큰 단위로 처리
-                    return explicit.split()
+            # -------- venv 이미 존재하면 재사용 --------
+            if venv_path.exists():
+                if os.name == "nt":
+                    py = venv_path / "Scripts" / "python.exe"
+                    pip = venv_path / "Scripts" / "pip.exe"
+                    activate = venv_path / "Scripts" / "activate.bat"
+                else:
+                    py = venv_path / "bin" / "python"
+                    pip = venv_path / "bin" / "pip"
+                    activate = venv_path / "bin" / "activate"
 
-                # 2) 버전 지정이 없으면 현재 인터프리터 사용
+                return self._ok({
+                    "message": f"venv already exists: {venv_path}",
+                    "venv": str(venv_path),
+                    "python": str(py),
+                    "pip": str(pip),
+                    "activate": str(activate),
+                    "installed": False,
+                    "upgraded": False,
+                    "interpreter_cmd": None,
+                })
+
+            # -------- 인터프리터 결정 --------
+            def _resolve_interpreter(version: str | None, explicit: str | None) -> list[str]:
+                if explicit:
+                    return explicit.split()
                 if not version:
                     return [sys.executable]
-
                 candidates: list[list[str]] = []
                 if os.name == "nt":
-                    # Windows: py 런처 우선
                     candidates += [["py", f"-{version}"]]
                     candidates += [[f"python{version}"], [f"python{version.replace('.', '')}"]]
                 else:
-                    # POSIX
                     candidates += [[f"python{version}"], [f"python{version.split('.')[0]}"]]
-
                 for cmd in candidates:
                     exe = shutil.which(cmd[0])
                     if not exe:
                         continue
-                    # 버전 검사
                     try:
                         out = subprocess.check_output(
                             cmd + ["-c", "import sys;print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
                             text=True
                         ).strip()
                         if out == version or out.startswith(version):
-                            cmd[0] = exe  # 정규화된 절대경로로 치환
+                            cmd[0] = exe
                             return cmd
                     except Exception:
                         continue
-
                 raise FileNotFoundError(f"Python {version} interpreter not found on PATH.")
 
-            interp_cmd = _resolve_interpreter(python_version, explicit_interp)
+            interp_cmd = _resolve_interpreter(python_version, interpreter)
 
             # -------- venv 생성 --------
-            # 주의: --upgrade-deps는 파이썬 버전에 따라 없을 수 있으므로,
-            # 여기서는 안전하게 기본 생성 후 pip로 업그레이드 수행.
             subprocess.check_call([*interp_cmd, "-m", "venv", str(venv_path)])
 
-            # python/pip 경로
+            # -------- 경로 세팅 --------
             if os.name == "nt":
                 py = venv_path / "Scripts" / "python.exe"
                 pip = venv_path / "Scripts" / "pip.exe"
+                activate = venv_path / "Scripts" / "activate.bat"
             else:
                 py = venv_path / "bin" / "python"
                 pip = venv_path / "bin" / "pip"
+                activate = venv_path / "bin" / "activate"
 
-            # deps 업그레이드
+            # -------- pip 보장 --------
+            def _ensure_pip():
+                if not pip.exists():
+                    url = "https://bootstrap.pypa.io/get-pip.py"
+                    get_pip = project_dir / "get-pip.py"
+                    subprocess.check_call(["wget", "-O", str(get_pip), url])
+                    subprocess.check_call([str(py), str(get_pip)])
+
+            _ensure_pip()
+
+            # -------- deps 업그레이드 --------
             if upgrade_deps:
                 subprocess.check_call([str(py), "-m", "pip", "install", "-U", "pip", "setuptools", "wheel"])
 
-            # requirements 설치
+            # -------- requirements 설치 --------
             if requirements:
                 req_path = Path(requirements)
                 if not req_path.is_absolute():
@@ -117,9 +129,10 @@ class FileManager:
                 "venv": str(venv_path),
                 "python": str(py),
                 "pip": str(pip),
+                "activate": str(activate),
                 "installed": bool(requirements),
                 "upgraded": upgrade_deps,
-                "interpreter_cmd": interp_cmd,  # 어떤 해석기를 사용했는지 기록
+                "interpreter_cmd": interp_cmd,
             })
 
         except subprocess.CalledProcessError as cpe:
@@ -127,44 +140,51 @@ class FileManager:
         except Exception as e:
             return self._err(str(e))
 
+
     @register("run_in_venv")
-    def run_in_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def run_in_venv(
+        self,
+        venv_path: str,
+        target: str = "train.py",
+        args: list[str] | None = None,
+        cwd: str | None = None,
+        timeout: int | float | None = None
+    ) -> Dict[str, Any]:
         """
-        metadata:
-          - venv_path (str, 필수): venv 디렉토리
-          - argv (list[str], 필수): python 뒤에 올 인자 (예: ["train.py", "--epochs", "10"])
-          - cwd (str, 선택): 작업 디렉토리
-          - timeout (int, 선택): 실행 제한(초)
+        Args:
+            venv_path (str, 필수): venv 디렉토리 (create_venv에서 반환된 값 사용)
+            target (str, 필수): 실행할 Python 스크립트 (기본 "train.py")
+            args (list[str], 선택): 추가 인자 (예: ["--epochs", "10"])
+            cwd (str, 선택): 작업 디렉토리
+            timeout (int|float, 선택): 실행 제한 시간(초)
         """
         try:
-            venv_path = metadata.get("venv_path")
-            argv = metadata.get("argv")
             if not venv_path:
-                return self._err("Required: metadata.venv_path")
-            if not argv or not isinstance(argv, list):
-                return self._err("Required: metadata.argv (list[str])")
+                return self._err("Required: venv_path")
 
             if os.name == "nt":
                 py = Path(venv_path) / "Scripts" / "python.exe"
             else:
                 py = Path(venv_path) / "bin" / "python"
+
             if not py.exists():
                 return self._err(f"python not found in {venv_path}")
 
-            cwd = metadata.get("cwd")
-            timeout = metadata.get("timeout")
+            argv = [str(target)]
+            if args:
+                argv.extend([str(a) for a in args])
 
             result = subprocess.run(
-                [str(py), *[str(a) for a in argv]],
+                [str(py), *argv],
                 cwd=cwd,
                 capture_output=True,
                 text=True,
                 timeout=timeout if isinstance(timeout, (int, float)) else None
             )
-            # 기존 스타일 유지: 성공이면 stdout만 돌려주고, 실패면 stderr를 담아 반환
             if result.returncode == 0:
                 return self._ok((result.stdout or "").strip())
             return self._err((result.stderr or "").strip() or f"returncode={result.returncode}")
+
         except subprocess.TimeoutExpired:
             return self._err("Execution timed out")
         except Exception as e:
@@ -201,11 +221,22 @@ class FileManager:
         except Exception as e:
             return self._err(str(e))
 
+    
+    #중복함수 
     @register("clone_repo_and_scan")
     def clone_repo_and_scan(self, dir_path: str, git_url: str) -> Dict[str, Any]:
         cloned = self.clone_repo(dir_path, git_url)
         if cloned.get("stderr"):
-            return cloned
+            repo_name=git_url.rstrip("/").split("/")[-1]
+            repo_path = str(Path(dir_path) / repo_name)
+            files = self.list_files(repo_name)
+            py = self.read_py_files(repo_name)
+            return self._ok({
+                "repo": repo_name,
+                "path": repo_path,
+                "file_list": files,
+                "py_files": py,
+            })
         repo_path = cloned["stdout"]["path"]
         files = self.list_files(repo_path)
         py = self.read_py_files(repo_path)
@@ -217,11 +248,11 @@ class FileManager:
         })
 
     @register("list_files")
-    def list_files(self, path: str) -> Dict[str, Any]:
+    def list_files(self, dir_path: str) -> Dict[str, Any]:
         try:
-            p = Path(path)
+            p = Path(dir_path)
             if not p.exists():
-                return self._err(f"Path not found: {path}")
+                return self._err(f"Path not found: {dir_path}")
             items = []
             for entry in p.iterdir():
                 items.append({
@@ -282,12 +313,12 @@ class FileManager:
                     i += 1
 
             for path_str in target:
-                # 경로 합치기: Path 연산자로 안전하게 처리
+                # ��� ��ġ��: Path �����ڷ� �����ϰ� ó��
                 fp = Path(self.root) / path_str
-                # metadata는 basename 기준으로만 매칭
+                # metadata�� basename �������θ� ��Ī
                 content = (
-                            metadata.get(str(fp))      # full path로 매칭
-                            or metadata.get(fp.name)   # 파일명만 매칭
+                            metadata.get(str(fp))      # full path�� ��Ī
+                            or metadata.get(fp.name)   # ���ϸ��� ��Ī
                         )
                 if content is None:
                     errors.append(f"no content for: {fp}")
