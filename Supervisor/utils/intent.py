@@ -8,7 +8,7 @@ class IntentClassifier:
     def get_intent(self, user_text: str) -> str:
         """
         user 입력의 의도 판별
-        return: "positive", "negative", "neutral", "question"
+        return: "positive", "negative", "revise"
         """
         system_prompt = self.sysprompts["intent_classifier"]
         messages = [
@@ -18,9 +18,7 @@ class IntentClassifier:
         raw = self.llm.generate(messages, max_new_tokens=8)
         norm = re.sub(r"[^a-z]", "", raw.lower())
 
-        for cand in ["positive", "negative", "neutral", "question"]:
+        for cand in ["positive", "negative", "revise"]:
             if cand in norm:
                 return cand
-        return "unknown"
-        
-    
+        return "negative"

@@ -1,6 +1,7 @@
 import socket
 import json
 import threading
+from .event_emitter import EventEmitter
 
 class SupervisorServer:
     def __init__(self, host="0.0.0.0", port=9001):
@@ -10,7 +11,8 @@ class SupervisorServer:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.conn=None
         self.addr=None
-        
+        self.emitter = EventEmitter()
+
     def start(self):
         """서버 시작"""
         self.server_socket.bind((self.host, self.port))
@@ -30,21 +32,31 @@ class SupervisorServer:
         try:
             while True:
                 data = self.conn.recv(4096)
+                if not data:
+                    break
 
-                task_data = json.loads(data.decode())
-                print(f"[Supervisor] Received: {task_data}", flush=True)
+                try:
+                    task_data = json.loads(data.decode())
+                    print(f"[Supervisor] Received: {task_data}", flush=True)                
+                    self.emitter.emit("coder_message", task_data)
 
+                except json.JSONDecodeError:
+                    print("[Supervisor] Invalid JSON received:", data.decode())
 
         except Exception as e:
             print(f"[Supervisor] Error: {e}")
 
-
     def send_supervisor_response(self, response):
         """supervisor 처리 결과 전송"""
         try:
+            if isinstance(response, dict):
+                response = json.dumps(response).encode("utf-8")
+            elif isinstance(response, str):
+                response = response.encode("utf-8")
             self.conn.sendall(response)
-        except Exception:
-            self.conn.sendall("Error!!".encode())
+        except Exception as e:
+            print(f"[Supervisor] 응답 전송 오류: {e}")
+            self.conn.sendall(b"Error!!")
 
     def run_main(self):
         """메인 스레드 실행"""

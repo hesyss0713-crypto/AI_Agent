@@ -39,59 +39,88 @@ class Supervisor:
     def on_coder_message(self, msg: dict):
         print("[Supervisor] 이벤트 수신:", msg)
 
+        if msg.get("command") == "git":
+            if msg.get("action") == "edit":
+                metadata = msg.get("metadata", {})
+                print("\n[Supervisor] Coder가 제안한 코드 수정안:")
+                for filename, content in metadata.items():
+                    print(f"\n--- {filename} ---\n{content}\n")
+                
+                user_input = input("[Supervisor] 이 수정 내용으로 학습을 진행할까요?")
+                intent = self.intent_cls.get_intent(user_input)
+
+                if intent == "positive":
+                    print("[Supervisor] 수정안을 토대로 학습을 진행하겠습니다.")
+                    task = build_task(command="git", action="run", target="train.py")
+                    self.socket.send_supervisor_response(task)
+                    
+                elif intent == "negative":
+                    print("[Supervisor] 수정이 취소되었습니다. 입력 루프로 돌아갑니다.")
+                    raise StopIteration
+                
+                elif intent == "revise":
+                    print("[Supervisor] 수정 재요청")
+            
+            elif msg.get("action") == "repo_files":
+                model_summary = self.git_handler.summarize_experiment(msg, persistent=True)
+                print(model_summary)
+
     def run(self):
         """Supervisor 메인 실행 루프"""
         self.llm.load_model()
         self.socket.run_main()
 
         while True:
-            text = input("[Supervisor] 무엇을 도와드릴까요? ")
+            try:
+                text = input("[Supervisor] 무엇을 도와드릴까요?")
 
-            if text.lower() == "exit":
-                print("[Supervisor] 종료")
-                break
+                if text.lower() == "exit":
+                    print("[Supervisor] 종료")
+                    break
 
-            if text.lower() == "reset":
-                self.llm.reset_memory()
-                print("[Supervisor] 대화 메모리 초기화됨.")
+                if text.lower() == "reset":
+                    self.llm.reset_memory()
+                    print("[Supervisor] 대화 메모리 초기화됨.")
+                    continue
+
+                # ===== 1. Command 분류 =====
+                command, persistent = self.router.get_command(text)
+
+                # ===== 2. Command별 처리 =====
+                if command == "git":
+                    url = self.git_handler.handle(text, persistent=persistent)
+                    task = build_task(command=command, action="clone_repo", metadata={url})
+                    self.socket.send_supervisor_response(task)
+                    ## coder로 부터 세팅 되었다고 알림 받아야함. on_coder에서    
+    # -------------------------------------------------------------------------------------------------------------------------
+                    # git repo clone 이후 → experiment 요약 + 수정
+                    coder_input = self.load_prompts("/workspace/AI_Agent/Supervisor/config/experiment.yaml")["file_content"]
+                    model_summary = self.git_handler.summarize_experiment(coder_input, persistent=persistent)
+                    print(model_summary)
+    # -------------------------------------------------------------------------------------------------------------------------
+
+                    # 수정할지 안할지 정해야함. [그냥 진행, 아예 빠져나가기] -> 사용자 입력으로 받아야하니 on_coder말고 여기서 받아서 진행.(아예 빠져나가기 -> continue while 처음으로 돌리기)
+                    edit_input = input("수정할 내용을 입력해주세요: ")
+                    target, metadata = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
+                    
+
+                    task = build_task(command=command, action="edit", target=target, metadata=metadata)
+                    self.socket.send_supervisor_response(task)
+                    
+    # --------------user 실행 여부 check --------------------------------------------------------------------------------------------
+                    
+                    task = build_task(command='train', action='run', target='train.py')
+                    self.socket.send_supervisor_response(task)
+
+                elif command == "conversation":
+                    reply = self.llm.run_with_prompt(self.prompts["conversation"], text, persistent=persistent)
+                    print("[Conversation]", reply)
+
+                else:
+                    print(f"[Supervisor] 아직 구현되지 않은 명령: {command}")
+            
+            except StopIteration:
                 continue
-
-            # ===== 1. Command 분류 =====
-            command, persistent = self.router.get_command(text)
-
-            # ===== 2. Command별 처리 =====
-            if command == "git":
-                self.git_handler.handle(text, persistent=persistent)
-                task = build_task(command=command, action="clone_repo")
-                self.socket.send_supervisor_response(task)
-                
-# -------------------------------------------------------------------------------------------------------------------------
-                # git repo clone 이후 → experiment 요약 + 수정
-                coder_input = self.load_prompts("/workspace/AI_Agent/Supervisor/config/experiment.yaml")["file_content"]
-                model_summary = self.git_handler.summarize_experiment(coder_input, persistent=persistent)
-                print(model_summary)
-# -------------------------------------------------------------------------------------------------------------------------
-
-
-                edit_input = input("수정할 내용을 입력해주세요: ")
-                edit_result = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
-                print(edit_result)
-
-                task = build_task(command=command, action="edit", metadata=edit_result)
-
-# --------------user 실행 여부 check --------------------------------------------------------------------------------------------
-                
-
-                task = build_task(command='train', action='run', target='train.py')
-                self.socket.send_supervisor_response(task)
-                
-            elif command == "conversation":
-                reply = self.llm.run_with_prompt(self.prompts["conversation"], text, persistent=persistent)
-                print("[Conversation]", reply)
-
-            else:
-                print(f"[Supervisor] 아직 구현되지 않은 명령: {command}")
-
 
 if __name__ == "__main__":
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"
