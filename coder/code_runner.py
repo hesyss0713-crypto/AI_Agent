@@ -215,7 +215,7 @@ class CodeRunner:
         t.join()
 
 if __name__ == "__main__":
-    runner = CodeRunner(host="172.17.0.1", port=9006)
+    runner = CodeRunner(host="172.17.0.1", port=9002)
     runner.run()
 
 # test_normalize.py (optional quick checks)
