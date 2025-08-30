@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 import shutil
 
-from utils.handler_registry import register
+from .handler_registry import register
 
 class FileManager:
     def __init__(self, root: str | None = None):
@@ -91,6 +91,70 @@ class FileManager:
                 for fp in root.rglob("*.py"):
                     out.append({"path": str(fp), "content": fp.read_text(encoding="utf-8", errors="ignore")})
             return self._ok(out)
+        except Exception as e:
+            return self._err(str(e))
+
+    @register("edit")
+    def edit(self, target: List[str], metadata: Dict[str, str]) -> Dict[str, Any]:
+        """Write multiple files in one call.
+        - target: list of file paths to write
+        - metadata: {<path or filename>: <content>}
+        Behavior:
+          * If a target file already exists, create a backup: file.ext.bak (or .bak.N)
+          * If metadata contains only the basename key (e.g., "model.py"), it will match any target with that name.
+        Return stdout as a dict: {message, changes:[{file, bak}], errors?}
+        """
+        
+        
+        try:
+            if not isinstance(target, list):
+                return self._err("target must be a list of paths")
+
+            changes: List[Dict[str, Any]] = []
+            errors: List[str] = []
+
+            def _content_for(fp: Path) -> str | None:
+                if str(fp) in metadata:
+                    return metadata[str(fp)]
+                if fp.name in metadata:
+                    return metadata[fp.name]
+                return None
+
+            def _unique_bak(orig: Path) -> Path:
+                bak = orig.with_suffix(orig.suffix + ".bak")
+                if not bak.exists():
+                    return bak
+                i = 1
+                while True:
+                    cand = orig.with_suffix(orig.suffix + f".bak.{i}")
+                    if not cand.exists():
+                        return cand
+                    i += 1
+
+            for path_str in target:
+                fp = Path(path_str)
+                content = _content_for(fp)
+                if content is None:
+                    errors.append(f"no content for: {path_str}")
+                    continue
+                try:
+                    fp.parent.mkdir(parents=True, exist_ok=True)
+                    bak_path: str | None = None
+                    if fp.exists():
+                        bak = _unique_bak(fp)
+                        shutil.copy2(fp, bak)
+                        bak_path = str(bak)
+                    fp.write_text(content, encoding="utf-8")
+                    changes.append({"file": str(fp), "bak": bak_path})
+                except Exception as e:
+                    errors.append(f"{path_str}: {e}")
+
+            result = {"message": f"edited {len(changes)} files", "changes": changes}
+            if errors:
+                result["errors"] = errors
+            if errors:
+                return {"stdout": result, "stderr": "".join(errors)}
+            return self._ok(result)
         except Exception as e:
             return self._err(str(e))
 

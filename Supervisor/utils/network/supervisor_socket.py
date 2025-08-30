@@ -3,7 +3,7 @@ import json
 import threading
 
 class SupervisorServer:
-    def __init__(self, host="0.0.0.0", port=9001):
+    def __init__(self, host="0.0.0.0", port=9006):
         self.host = host
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

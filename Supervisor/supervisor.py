@@ -1,12 +1,14 @@
 import logging
 import yaml
-from utils.network import supervisor_socket
+from utils.network import supervisor_socket, event_emitter
 from utils.db.db import DBManager
 from utils.router import CommandRouter
 from utils.intent import IntentClassifier
+from utils.message_builder import build_task, build_response
 from handlers.git_handler import GitHandler
 from llm.llm_manager import LLMManager
 import json
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -22,15 +24,21 @@ class Supervisor:
         # config 로드 (prompts.yaml)
         self.prompts = self.load_prompts()
 
+        self.emitter = event_emitter.EventEmitter()
         # Router, IntentClassifier, Handlers 초기화
         self.router = CommandRouter(self.llm, self.prompts)
         self.intent_cls = IntentClassifier(self.llm, self.prompts)
         self.git_handler = GitHandler(self.llm, self.prompts)
+        self.emitter.on("coder_message", self.on_coder_message)
 
+    
     def load_prompts(self, path="/home/test/CustomProject/AI_Agent/Supervisor/config/prompts.yaml") -> dict:
         """system prompt yaml 로드"""
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
+
+    def on_coder_message(self, msg: dict):
+        print("[Supervisor] 이벤트 수신:", msg)
 
     def run(self):
         """Supervisor 메인 실행 루프"""
@@ -54,20 +62,33 @@ class Supervisor:
 
             # ===== 2. Command별 처리 =====
             if command == "git":
-                msg=self.git_handler.handle(text, persistent=persistent)
+                # self.git_handler.handle(text, persistent=persistent)
+                # task = build_task(command=command, action="clone_repo",metadata={"git_url"})
+                # task = json.dumps(task).encode("utf-8") + b"\n"
+                # self.socket.send_supervisor_response(task)
                 
-                
-                self.socket.send_supervisor_response(json.dumps(msg))
-                
+# -------------------------------------------------------------------------------------------------------------------------
                 # git repo clone 이후 → experiment 요약 + 수정
                 coder_input = self.load_prompts("/home/test/CustomProject/AI_Agent/Supervisor/config/experiment.yaml")["file_content"]
                 model_summary = self.git_handler.summarize_experiment(coder_input, persistent=persistent)
                 print(model_summary)
 
+
+
                 edit_input = input("수정할 내용을 입력해주세요: ")
                 edit_result = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
                 print(edit_result)
 
+                task = build_task(command=command,action=edit_result["action"], target=edit_result["target"],metadata=edit_result["metadata"])
+                task = json.dumps(task).encode("utf-8")
+                self.socket.send_supervisor_response(task)
+# --------------user 실행 여부 check --------------------------------------------------------------------------------------------
+                
+
+                task = build_task(command='train', action='run', target="train.py")
+                task = json.dumps(task).encode("utf-8")
+                self.socket.send_supervisor_response(task)
+                
             elif command == "conversation":
                 reply = self.llm.run_with_prompt(self.prompts["conversation"], text, persistent=persistent)
                 print("[Conversation]", reply)
