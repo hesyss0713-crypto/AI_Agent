@@ -1,7 +1,7 @@
 
 ## 기본 데이터 형태
-msg={"command": command, "result": stdout, "metadata": metadata}
-msg={"command": command, "result": stderr, "metadata": metadata}
+msg={"command": command, "result": success, "metadata": metadata}
+msg={"command": command, "result": fail, "metadata": metadata}
 metadata=
 
 {
@@ -23,19 +23,22 @@ action: str = "clone_repo"
 dir_path: str = "/workspace/
 
 
-## 액션 "list_files" coder의 git 에 대한 파일 목록 요청
-def list_files(self, path: str):
+## 액션 "read_py_files" coder의 git 프로젝트의 py 파일에 대한 코드내용 요청
+read_py_files(self, dir_path: str):
 stdout: list[dict,dict,dict,...]
 #### EX### 
 [
-    {"name": "model.py", "path": "AI_Agent_Model/model.py", "is_dir": False},
-    {"name": "train.py", "path": "AI_Agent_Model/train.py", "is_dir": True},
-    {"name": "readme.md", "path": "AI_Agent_Model/readme.md", "is_dir": False}
+    {"path": "model.py", "content": "import torch.nn as nn..."},
+    {"path": "train.py", "path": "import torch.nn as nn...",}
 ]
 
 stderr: str
-action: str = "list_files"
+action: str = "read_py_files"
 dir_path: str = "/workspace/"
+
+
+
+
 
 
 
@@ -60,6 +63,28 @@ stdout: {"venv": str(venv_path),
 stderr: str
 action: str = "create_venv"
 dir_path: str = "/workspace/"
+
+
+## 액션 "list_files" coder의 git 에 대한 파일 목록 요청
+def list_files(self, path: str):
+stdout: list[dict,dict,dict,...]
+#### EX### 
+[
+    {"name": "model.py", "path": "AI_Agent_Model/model.py", "is_dir": False},
+    {"name": "train.py", "path": "AI_Agent_Model/train.py", "is_dir": True},
+    {"name": "readme.md", "path": "AI_Agent_Model/readme.md", "is_dir": False}
+]
+
+stderr: str
+action: str = "list_files"
+dir_path: str = "/workspace/"
+
+
+
+
+
+
+
 
 
 ## 액션 edit 요청된 파일의 내용 수정
