@@ -33,7 +33,7 @@ class FileManager:
 
             venv_path = Path(venv_path).resolve()
 
-            # venv ì•ˆì˜ python ì‹¤í–‰íŒŒì¼ ì°¾ê¸°
+            # venv ¾ÈÀÇ python ½ÇÇàÆÄÀÏ Ã£±â
             if os.name == "nt":
                 py = venv_path / "Scripts" / "python.exe"
             else:
@@ -42,10 +42,10 @@ class FileManager:
             if not py.exists():
                 return self._err(f"python not found in {venv_path}")
 
-            # ì‘ì—… ë””ë ‰í† ë¦¬ (ì—†ìœ¼ë©´ venv ìƒìœ„ í´ë”) â†’ ì ˆëŒ€ê²½ë¡œí™”
+            # ÀÛ¾÷ µğ·ºÅä¸® (¾øÀ¸¸é venv »óÀ§ Æú´õ) ¡æ Àı´ë°æ·ÎÈ­
             workdir = Path(cwd).resolve() if cwd else venv_path.parent.resolve()
 
-            # ì‹¤í–‰í•  ìŠ¤í¬ë¦½íŠ¸ ê²½ë¡œ â†’ ì ˆëŒ€ê²½ë¡œí™”
+            # ½ÇÇàÇÒ ½ºÅ©¸³Æ® °æ·Î ¡æ Àı´ë°æ·ÎÈ­
             script = (workdir / target).resolve()
 
             if not script.exists():
@@ -55,7 +55,7 @@ class FileManager:
             if args:
                 argv.extend([str(a) for a in args])
 
-            # ì‹¤í–‰
+            # ½ÇÇà
             result = subprocess.run(
                 [str(py), *argv],
                 cwd=str(workdir),
@@ -107,7 +107,7 @@ class FileManager:
             return self._err(str(e))
 
     
-    #ì¤‘ë³µí•¨ìˆ˜ 
+    #Áßº¹ÇÔ¼ö 
     @register("clone_repo_and_scan")
     def clone_repo_and_scan(self, dir_path: str, git_url: str) -> Dict[str, Any]:
         cloned = self.clone_repo(dir_path, git_url)
@@ -167,7 +167,7 @@ class FileManager:
                     })
             else:
                 for fp in root.rglob("*.py"):
-                    # ê°€ìƒí™˜ê²½, ìºì‹œ, ì„¤ì¹˜ ìŠ¤í¬ë¦½íŠ¸ ì œì™¸
+                    # °¡»óÈ¯°æ, Ä³½Ã, ¼³Ä¡ ½ºÅ©¸³Æ® Á¦¿Ü
                     if any(part in {".venv", "venv", "env", "__pycache__"} for part in fp.parts):
                         continue
                     if fp.name.startswith("get-pip") or fp.name.startswith("pip-"):
@@ -215,13 +215,14 @@ class FileManager:
                     i += 1
 
             for path_str in target:
-                # ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½: Path ï¿½ï¿½ï¿½ï¿½ï¿½Ú·ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï°ï¿½ Ã³ï¿½ï¿½
+                # °æ·Î ÇÕÄ¡±â: Path ¿¬»êÀÚ·Î ¾ÈÀüÇÏ°Ô Ã³¸®
                 fp = Path(self.root) / path_str
-                # metadataï¿½ï¿½ basename ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¸ï¿½ ï¿½ï¿½Äª
+                # metadata´Â basename ±âÁØÀ¸·Î¸¸ ¸ÅÄª
                 content = (
-                            metadata.get(str(fp))      # full pathï¿½ï¿½ ï¿½ï¿½Äª
-                            or metadata.get(fp.name)   # ï¿½ï¿½ï¿½Ï¸ï¿½ï¿½ï¿½ ï¿½ï¿½Äª
-                        )
+                    metadata.get(str(fp))      # full path·Î ¸ÅÄª
+                    or metadata.get(fp.name)   # ÆÄÀÏ¸í¸¸ ¸ÅÄª
+                )
+
                 if content is None:
                     errors.append(f"no content for: {fp}")
                     continue
