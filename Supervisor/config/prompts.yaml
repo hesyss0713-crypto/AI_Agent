@@ -14,7 +14,7 @@ classifier: |
 
 intent_classifier: |
   Classify the user intent into one of:
-  [positive, negative, neutral, question].
+  [positive, negative, revise].
   Output one word only.
   
 git: |

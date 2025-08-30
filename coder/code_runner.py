@@ -21,7 +21,7 @@ class CodeRunner:
         self.python = python_executable or sys.executable
         self.timeout = timeout
 
-        self.file_manager = FileManager()
+        self.file_manager = FileManager(root="/workspace/")
         self.web_manager = WebManager()
 
         self.client = CoderClient(host, port)

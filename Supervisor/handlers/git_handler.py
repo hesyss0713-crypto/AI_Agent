@@ -6,6 +6,7 @@ class GitHandler:
         self.llm = llm
         self.web_manager = WebManager()
         self.sysprompts = sysprompts
+        self.execute_file = None
 
     def handle(self, text: str, persistent=False):
         """GitHub URL을 받아 README 요약 생성"""
@@ -14,7 +15,7 @@ class GitHandler:
 
         if not readme_text:
             print("[GitHandler] README.md를 가져올 수 없습니다.")
-            return
+            return 
 
         # LLM 요약
         summary = self.llm.run_with_prompt(
@@ -25,6 +26,7 @@ class GitHandler:
         )
         print("[GitHandler] 프로젝트 요약:\n", summary)
         print(f"[GitHandler] Coder에게 git clone 요청 : {url}")
+        return url
 
     def extract_urls(self, prompt: str) -> str:
         """텍스트에서 URL 추출"""
@@ -51,7 +53,7 @@ class GitHandler:
         else:
             sys_part = raw_summary.strip()
             user_part = "No explicit User Summary found."
-
+        
         return {"system_summary": sys_part, "user_summary": user_part}
 
     def generate_edit_task(self, user_input: str, experiment: dict, persistent: bool = False) -> dict:
@@ -80,4 +82,4 @@ class GitHandler:
         if current_file and buffer:
             result[current_file] = "\n".join(buffer).strip()
 
-        return {"action": "edit", "target": list(result.keys()), "metadata": result}
+        return list(result.keys()), result

@@ -3,8 +3,9 @@ import zipfile
 from pathlib import Path
 from typing import List, Dict, Any
 import shutil
-
+import venv
 from .handler_registry import register
+import os, sys
 
 class FileManager:
     def __init__(self, root: str | None = None):
@@ -18,6 +19,160 @@ class FileManager:
     def _err(msg: str) -> Dict[str, Any]:
         return {"stdout": None, "stderr": msg}
 
+    
+    
+    @register("create_venv")
+    def create_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        metadata:
+        - dir_path (str, 필수): 프로젝트 경로
+        - venv_name (str, 선택): 가상환경 폴더명 (기본 '.venv')
+        - requirements (str, 선택): requirements.txt 경로(상대/절대 모두 허용)
+        - upgrade_deps (bool, 선택): pip/setuptools 업그레이드 여부 (기본 True)
+        - python_version (str, 선택): '3.10', '3.11' 같이 원하는 메이저.마이너 버전
+        - interpreter (str, 선택): 사용할 파이썬 실행 파일(명령) 경로/이름 (예: '/usr/bin/python3.10', 'py -3.10')
+        """
+        try:
+            dir_path = metadata.get("dir_path")
+            if not dir_path:
+                return self._err("Required: metadata.dir_path")
+
+            venv_name      = metadata.get("venv_name", ".venv")
+            requirements   = metadata.get("requirements")
+            upgrade_deps   = bool(metadata.get("upgrade_deps", True))
+            python_version = metadata.get("python_version")  # e.g. "3.10"
+            explicit_interp= metadata.get("interpreter")     # full path or command
+
+            project_dir = Path(dir_path).expanduser().resolve()
+            project_dir.mkdir(parents=True, exist_ok=True)
+            venv_path = project_dir / venv_name
+
+            # -------- 인터프리터 해석 로직 --------
+            def _resolve_interpreter(version: str | None, explicit: str | None) -> list[str]:
+                # 1) 명시된 interpreter 우선
+                if explicit:
+                    # 공백이 포함될 수 있으니 토큰 단위로 처리
+                    return explicit.split()
+
+                # 2) 버전 지정이 없으면 현재 인터프리터 사용
+                if not version:
+                    return [sys.executable]
+
+                candidates: list[list[str]] = []
+                if os.name == "nt":
+                    # Windows: py 런처 우선
+                    candidates += [["py", f"-{version}"]]
+                    candidates += [[f"python{version}"], [f"python{version.replace('.', '')}"]]
+                else:
+                    # POSIX
+                    candidates += [[f"python{version}"], [f"python{version.split('.')[0]}"]]
+
+                for cmd in candidates:
+                    exe = shutil.which(cmd[0])
+                    if not exe:
+                        continue
+                    # 버전 검사
+                    try:
+                        out = subprocess.check_output(
+                            cmd + ["-c", "import sys;print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+                            text=True
+                        ).strip()
+                        if out == version or out.startswith(version):
+                            cmd[0] = exe  # 정규화된 절대경로로 치환
+                            return cmd
+                    except Exception:
+                        continue
+
+                raise FileNotFoundError(f"Python {version} interpreter not found on PATH.")
+
+            interp_cmd = _resolve_interpreter(python_version, explicit_interp)
+
+            # -------- venv 생성 --------
+            # 주의: --upgrade-deps는 파이썬 버전에 따라 없을 수 있으므로,
+            # 여기서는 안전하게 기본 생성 후 pip로 업그레이드 수행.
+            subprocess.check_call([*interp_cmd, "-m", "venv", str(venv_path)])
+
+            # python/pip 경로
+            if os.name == "nt":
+                py = venv_path / "Scripts" / "python.exe"
+                pip = venv_path / "Scripts" / "pip.exe"
+            else:
+                py = venv_path / "bin" / "python"
+                pip = venv_path / "bin" / "pip"
+
+            # deps 업그레이드
+            if upgrade_deps:
+                subprocess.check_call([str(py), "-m", "pip", "install", "-U", "pip", "setuptools", "wheel"])
+
+            # requirements 설치
+            if requirements:
+                req_path = Path(requirements)
+                if not req_path.is_absolute():
+                    req_path = project_dir / req_path
+                if not req_path.exists():
+                    return self._err(f"requirements not found: {req_path}")
+                subprocess.check_call([str(pip), "install", "-r", str(req_path)])
+
+            return self._ok({
+                "venv": str(venv_path),
+                "python": str(py),
+                "pip": str(pip),
+                "installed": bool(requirements),
+                "upgraded": upgrade_deps,
+                "interpreter_cmd": interp_cmd,  # 어떤 해석기를 사용했는지 기록
+            })
+
+        except subprocess.CalledProcessError as cpe:
+            return self._err(f"venv/pip failed (returncode={cpe.returncode})")
+        except Exception as e:
+            return self._err(str(e))
+
+    @register("run_in_venv")
+    def run_in_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        metadata:
+          - venv_path (str, 필수): venv 디렉토리
+          - argv (list[str], 필수): python 뒤에 올 인자 (예: ["train.py", "--epochs", "10"])
+          - cwd (str, 선택): 작업 디렉토리
+          - timeout (int, 선택): 실행 제한(초)
+        """
+        try:
+            venv_path = metadata.get("venv_path")
+            argv = metadata.get("argv")
+            if not venv_path:
+                return self._err("Required: metadata.venv_path")
+            if not argv or not isinstance(argv, list):
+                return self._err("Required: metadata.argv (list[str])")
+
+            if os.name == "nt":
+                py = Path(venv_path) / "Scripts" / "python.exe"
+            else:
+                py = Path(venv_path) / "bin" / "python"
+            if not py.exists():
+                return self._err(f"python not found in {venv_path}")
+
+            cwd = metadata.get("cwd")
+            timeout = metadata.get("timeout")
+
+            result = subprocess.run(
+                [str(py), *[str(a) for a in argv]],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=timeout if isinstance(timeout, (int, float)) else None
+            )
+            # 기존 스타일 유지: 성공이면 stdout만 돌려주고, 실패면 stderr를 담아 반환
+            if result.returncode == 0:
+                return self._ok((result.stdout or "").strip())
+            return self._err((result.stderr or "").strip() or f"returncode={result.returncode}")
+        except subprocess.TimeoutExpired:
+            return self._err("Execution timed out")
+        except Exception as e:
+            return self._err(str(e))
+    
+    
+    
+    @register("run")
     def _run(self, cmd: list[str], cwd: Path | None = None) -> Dict[str, Any]:
         try:
             result = subprocess.run(cmd, cwd=str(cwd) if cwd else None, capture_output=True, text=True)
@@ -96,29 +251,24 @@ class FileManager:
 
     @register("edit")
     def edit(self, target: List[str], metadata: Dict[str, str]) -> Dict[str, Any]:
-        """Write multiple files in one call.
-        - target: list of file paths to write
-        - metadata: {<path or filename>: <content>}
+        """
+        Write multiple files in one call.
+        - target: list of file paths to write (e.g., ["model.py"])
+        - metadata: {<filename>: <content>}
         Behavior:
-          * If a target file already exists, create a backup: file.ext.bak (or .bak.N)
-          * If metadata contains only the basename key (e.g., "model.py"), it will match any target with that name.
+        * If a target file already exists, create a backup: file.ext.bak (or .bak.N)
+        * Match metadata by filename only (basename).
         Return stdout as a dict: {message, changes:[{file, bak}], errors?}
         """
-        
-        
+        self.root = "/workspace/AI_Agent_Model/"
         try:
             if not isinstance(target, list):
                 return self._err("target must be a list of paths")
+            if not isinstance(metadata, dict):
+                return self._err("metadata must be a dict of {path or name: content}")
 
             changes: List[Dict[str, Any]] = []
             errors: List[str] = []
-
-            def _content_for(fp: Path) -> str | None:
-                if str(fp) in metadata:
-                    return metadata[str(fp)]
-                if fp.name in metadata:
-                    return metadata[fp.name]
-                return None
 
             def _unique_bak(orig: Path) -> Path:
                 bak = orig.with_suffix(orig.suffix + ".bak")
@@ -132,11 +282,17 @@ class FileManager:
                     i += 1
 
             for path_str in target:
-                fp = Path(path_str)
-                content = _content_for(fp)
+                # 경로 합치기: Path 연산자로 안전하게 처리
+                fp = Path(self.root) / path_str
+                # metadata는 basename 기준으로만 매칭
+                content = (
+                            metadata.get(str(fp))      # full path로 매칭
+                            or metadata.get(fp.name)   # 파일명만 매칭
+                        )
                 if content is None:
-                    errors.append(f"no content for: {path_str}")
+                    errors.append(f"no content for: {fp}")
                     continue
+
                 try:
                     fp.parent.mkdir(parents=True, exist_ok=True)
                     bak_path: str | None = None
@@ -147,13 +303,12 @@ class FileManager:
                     fp.write_text(content, encoding="utf-8")
                     changes.append({"file": str(fp), "bak": bak_path})
                 except Exception as e:
-                    errors.append(f"{path_str}: {e}")
+                    errors.append(f"{fp}: {e}")
 
             result = {"message": f"edited {len(changes)} files", "changes": changes}
             if errors:
                 result["errors"] = errors
-            if errors:
-                return {"stdout": result, "stderr": "".join(errors)}
+                return {"stdout": result, "stderr": "\n".join(errors)}
             return self._ok(result)
         except Exception as e:
             return self._err(str(e))
