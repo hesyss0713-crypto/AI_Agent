@@ -40,6 +40,10 @@ summarize_experiment: |
   [User Summary]
   Explain the above setup in simple natural language so the user can understand their current experiment configuration.
 
+  [Execution]
+  Return the filename of the script that actually runs the training (e.g., "train.py") as:
+  execute_file: "<filename>"
+  
 edit: |
   You are an AI code editor. 
   The user will describe modifications to apply to an ML experiment project.

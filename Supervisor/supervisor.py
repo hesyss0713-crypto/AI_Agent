@@ -98,14 +98,16 @@ class Supervisor:
                     model_summary = self.git_handler.summarize_experiment(coder_input, persistent=persistent)
                     print(model_summary)
     # -------------------------------------------------------------------------------------------------------------------------
-
-                    # 수정할지 안할지 정해야함. [그냥 진행, 아예 빠져나가기] -> 사용자 입력으로 받아야하니 on_coder말고 여기서 받아서 진행.(아예 빠져나가기 -> continue while 처음으로 돌리기)
-                    edit_input = input("수정할 내용을 입력해주세요: ")
-                    target, metadata = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
+                    user_input = input("[Supervisor] 수정하시겠습니까?")
+                    intent = self.intent_cls.get_intent(user_input)
                     
-
-                    task = build_task(command=command, action="edit", target=target, metadata=metadata)
-                    self.socket.send_supervisor_response(task)
+                    if intent == "positive":
+                        edit_input = input("수정할 내용을 입력해주세요: ")
+                        target, metadata = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
+                        task = build_task(command=command, action="edit", target=target, metadata=metadata)
+                        self.socket.send_supervisor_response(task)
+                    else:
+                        continue
                     
     # --------------user 실행 여부 check --------------------------------------------------------------------------------------------
                     
