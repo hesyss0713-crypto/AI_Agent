@@ -18,169 +18,52 @@ class FileManager:
     @staticmethod
     def _err(msg: str) -> Dict[str, Any]:
         return {"stdout": None, "stderr": msg}
-
-    @register("create_venv")
-    def create_venv(
-        self,
-        dir_path: str,
-        venv_name: str = "venv",
-        requirements: str | None = None,
-        upgrade_deps: bool = True,
-        python_version: str | None = None,
-        interpreter: str | None = None
-    ) -> Dict[str, Any]:
-        """
-        가상환경 생성 (존재하면 재사용)
-        """
-        try:
-            project_dir = Path(dir_path).expanduser().resolve()
-            project_dir.mkdir(parents=True, exist_ok=True)
-            venv_path = project_dir / venv_name
-
-            # -------- venv 이미 존재하면 재사용 --------
-            if venv_path.exists():
-                if os.name == "nt":
-                    py = venv_path / "Scripts" / "python.exe"
-                    pip = venv_path / "Scripts" / "pip.exe"
-                    activate = venv_path / "Scripts" / "activate.bat"
-                else:
-                    py = venv_path / "bin" / "python"
-                    pip = venv_path / "bin" / "pip"
-                    activate = venv_path / "bin" / "activate"
-
-                return self._ok({
-                    "message": f"venv already exists: {venv_path}",
-                    "venv": str(venv_path),
-                    "python": str(py),
-                    "pip": str(pip),
-                    "activate": str(activate),
-                    "installed": False,
-                    "upgraded": False,
-                    "interpreter_cmd": None,
-                })
-
-            # -------- 인터프리터 결정 --------
-            def _resolve_interpreter(version: str | None, explicit: str | None) -> list[str]:
-                if explicit:
-                    return explicit.split()
-                if not version:
-                    return [sys.executable]
-                candidates: list[list[str]] = []
-                if os.name == "nt":
-                    candidates += [["py", f"-{version}"]]
-                    candidates += [[f"python{version}"], [f"python{version.replace('.', '')}"]]
-                else:
-                    candidates += [[f"python{version}"], [f"python{version.split('.')[0]}"]]
-                for cmd in candidates:
-                    exe = shutil.which(cmd[0])
-                    if not exe:
-                        continue
-                    try:
-                        out = subprocess.check_output(
-                            cmd + ["-c", "import sys;print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
-                            text=True
-                        ).strip()
-                        if out == version or out.startswith(version):
-                            cmd[0] = exe
-                            return cmd
-                    except Exception:
-                        continue
-                raise FileNotFoundError(f"Python {version} interpreter not found on PATH.")
-
-            interp_cmd = _resolve_interpreter(python_version, interpreter)
-
-            # -------- venv 생성 --------
-            subprocess.check_call([*interp_cmd, "-m", "venv", str(venv_path)])
-
-            # -------- 경로 세팅 --------
-            if os.name == "nt":
-                py = venv_path / "Scripts" / "python.exe"
-                pip = venv_path / "Scripts" / "pip.exe"
-                activate = venv_path / "Scripts" / "activate.bat"
-            else:
-                py = venv_path / "bin" / "python"
-                pip = venv_path / "bin" / "pip"
-                activate = venv_path / "bin" / "activate"
-
-            # -------- pip 보장 --------
-            def _ensure_pip():
-                if not pip.exists():
-                    url = "https://bootstrap.pypa.io/get-pip.py"
-                    get_pip = project_dir / "get-pip.py"
-                    subprocess.check_call(["wget", "-O", str(get_pip), url])
-                    subprocess.check_call([str(py), str(get_pip)])
-
-            _ensure_pip()
-
-            # -------- deps 업그레이드 --------
-            if upgrade_deps:
-                subprocess.check_call([str(py), "-m", "pip", "install", "-U", "pip", "setuptools", "wheel"])
-
-            # -------- requirements 설치 --------
-            if requirements:
-                req_path = Path(requirements)
-                if not req_path.is_absolute():
-                    req_path = project_dir / req_path
-                if not req_path.exists():
-                    return self._err(f"requirements not found: {req_path}")
-                subprocess.check_call([str(pip), "install", "-r", str(req_path)])
-
-            return self._ok({
-                "venv": str(venv_path),
-                "python": str(py),
-                "pip": str(pip),
-                "activate": str(activate),
-                "installed": bool(requirements),
-                "upgraded": upgrade_deps,
-                "interpreter_cmd": interp_cmd,
-            })
-
-        except subprocess.CalledProcessError as cpe:
-            return self._err(f"venv/pip failed (returncode={cpe.returncode})")
-        except Exception as e:
-            return self._err(str(e))
-
-
     @register("run_in_venv")
     def run_in_venv(
-        self,
-        venv_path: str,
-        target: str = "train.py",
-        args: list[str] | None = None,
-        cwd: str | None = None,
-        timeout: int | float | None = None
-    ) -> Dict[str, Any]:
-        """
-        Args:
-            venv_path (str, 필수): venv 디렉토리 (create_venv에서 반환된 값 사용)
-            target (str, 필수): 실행할 Python 스크립트 (기본 "train.py")
-            args (list[str], 선택): 추가 인자 (예: ["--epochs", "10"])
-            cwd (str, 선택): 작업 디렉토리
-            timeout (int|float, 선택): 실행 제한 시간(초)
-        """
+    self,
+    venv_path: str,
+    target: str = "train.py",
+    args: List[str] | None = None,
+    cwd: str | None = None,
+    timeout: int | float | None = None
+) -> Dict[str, Any]:
         try:
             if not venv_path:
                 return self._err("Required: venv_path")
 
+            venv_path = Path(venv_path).resolve()
+
+            # venv 안의 python 실행파일 찾기
             if os.name == "nt":
-                py = Path(venv_path) / "Scripts" / "python.exe"
+                py = venv_path / "Scripts" / "python.exe"
             else:
-                py = Path(venv_path) / "bin" / "python"
+                py = venv_path / "bin" / "python"
 
             if not py.exists():
                 return self._err(f"python not found in {venv_path}")
 
-            argv = [str(target)]
+            # 작업 디렉토리 (없으면 venv 상위 폴더) → 절대경로화
+            workdir = Path(cwd).resolve() if cwd else venv_path.parent.resolve()
+
+            # 실행할 스크립트 경로 → 절대경로화
+            script = (workdir / target).resolve()
+
+            if not script.exists():
+                return self._err(f"target not found: {script}")
+
+            argv = [str(script)]
             if args:
                 argv.extend([str(a) for a in args])
 
+            # 실행
             result = subprocess.run(
                 [str(py), *argv],
-                cwd=cwd,
+                cwd=str(workdir),
                 capture_output=True,
                 text=True,
                 timeout=timeout if isinstance(timeout, (int, float)) else None
             )
+
             if result.returncode == 0:
                 return self._ok((result.stdout or "").strip())
             return self._err((result.stderr or "").strip() or f"returncode={result.returncode}")
@@ -189,6 +72,8 @@ class FileManager:
             return self._err("Execution timed out")
         except Exception as e:
             return self._err(str(e))
+
+
     
     
     
@@ -214,8 +99,8 @@ class FileManager:
             work = Path(dir_path)
             work.mkdir(parents=True, exist_ok=True)
             result = subprocess.run(["git", "clone", git_url], cwd=str(work), capture_output=True, text=True)
-            if result.returncode != 0:
-                return self._err(result.stderr.strip() or "git clone failed")
+            # if result.returncode != 0:
+            #     return self._err(result.stderr.strip() or "git clone failed")
             repo_name = git_url.rstrip("/").split("/")[-1]
             return self._ok({"repo": repo_name, "path": str(work / repo_name)})
         except Exception as e:
@@ -255,6 +140,8 @@ class FileManager:
                 return self._err(f"Path not found: {dir_path}")
             items = []
             for entry in p.iterdir():
+                if entry.name in {".venv", "venv", "env"}:
+                    continue
                 items.append({
                     "name": entry.name,
                     "path": str(entry),
@@ -265,17 +152,32 @@ class FileManager:
             return self._err(str(e))
 
     @register("read_py_files")
-    def read_py_files(self, root_path: str) -> Dict[str, Any]:
+    def read_py_files(self, dir_path: str) -> Dict[str, Any]:
         try:
-            root = Path(root_path)
+            root = Path(dir_path)
             if not root.exists():
-                return self._err(f"Path not found: {root_path}")
+                return self._err(f"Path not found: {dir_path}")
+
             out: List[Dict[str, str]] = []
             if root.is_file() and root.suffix == ".py":
-                out.append({"path": str(root), "content": root.read_text(encoding="utf-8", errors="ignore")})
+                if root.name not in {"get-pip.py"}:
+                    out.append({
+                        "path": str(root),
+                        "content": root.read_text(encoding="utf-8", errors="ignore")
+                    })
             else:
                 for fp in root.rglob("*.py"):
-                    out.append({"path": str(fp), "content": fp.read_text(encoding="utf-8", errors="ignore")})
+                    # 가상환경, 캐시, 설치 스크립트 제외
+                    if any(part in {".venv", "venv", "env", "__pycache__"} for part in fp.parts):
+                        continue
+                    if fp.name.startswith("get-pip") or fp.name.startswith("pip-"):
+                        continue
+
+                    out.append({
+                        "path": str(fp),
+                        "content": fp.read_text(encoding="utf-8", errors="ignore")
+                    })
+
             return self._ok(out)
         except Exception as e:
             return self._err(str(e))

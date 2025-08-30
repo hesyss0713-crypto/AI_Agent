@@ -133,7 +133,9 @@ class CodeRunner:
             meta = message.get("metadata")
             kwargs["dir_path"] = meta["dir_path"]
         
-
+        elif action == "read_py_files":
+            meta = message.get("metadata")
+            kwargs["dir_path"] = meta["dir_path"]
         
         elif action == "create_venv":
             metadata = message.get("metadata")
@@ -285,10 +287,17 @@ class CodeRunner:
         dir_path: str = "/workspace/"
         '''
 
+        metadata={
+            "stdout":stdout,
+            "stderr":stderr,
+            **kwargs
+        }
+        
+
         if stdout is not None:
-            return {"command": command, "action": action, "result": stdout, "metadata": kwargs}
+            return {"command": command, "action": action, "result": "success", "metadata": metadata}
         elif stdout is None and stderr is not None:
-            return {"command": command, "action": action, "result": stderr, "metadata": kwargs}
+            return {"command": command, "action": action, "result": "fail", "metadata": metadata}
         
         
     def _on_message(self, message: dict):
@@ -328,7 +337,7 @@ class CodeRunner:
         t.join()
 
 if __name__ == "__main__":
-    runner = CodeRunner(host="172.17.0.1", port=9002)
+    runner = CodeRunner(host="172.17.0.1", port=9006)
     runner.run()
 
 # test_normalize.py (optional quick checks)

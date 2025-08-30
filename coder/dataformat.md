@@ -1,22 +1,19 @@
 
 ## 기본 데이터 형태
-
-```
 msg={"command": command, "result": stdout, "metadata": metadata}
 msg={"command": command, "result": stderr, "metadata": metadata}
-
 metadata=
+
 {
     stdout: dict{...}
     stderr: str
     action: str = "clone_repo"
     dir_path: str = "/workspace/
 }
-```
+
 action은 supervisor의 action 정의를 따라가도록 바꿀 예정
 
 ## 액션 clone_repo : Git 클론
-```
 def clone_repo(self, dir_path: str, git_url: str)
 
 
@@ -25,28 +22,25 @@ stderr: str
 action: str = "clone_repo"
 dir_path: str = "/workspace/
 
-```
 
 ## 액션 "list_files" coder의 git 에 대한 파일 목록 요청
-
-```
 def list_files(self, path: str):
-    stdout: list[dict,dict,dict,...]
-    
-    [
-        {"name": "model.py", "path": "AI_Agent_Model/model.py", "is_dir": False},
-        {"name": "train.py", "path": "AI_Agent_Model/train.py", "is_dir": True},
-        {"name": "readme.md", "path": "AI_Agent_Model/readme.md", "is_dir": False}
-    ]
+stdout: list[dict,dict,dict,...]
+#### EX### 
+[
+    {"name": "model.py", "path": "AI_Agent_Model/model.py", "is_dir": False},
+    {"name": "train.py", "path": "AI_Agent_Model/train.py", "is_dir": True},
+    {"name": "readme.md", "path": "AI_Agent_Model/readme.md", "is_dir": False}
+]
 
 stderr: str
 action: str = "list_files"
 dir_path: str = "/workspace/"
-```
+
 
 
 ## 액션 "create_venv" Git 기준 가상환경 만들기
-```   
+    
 def create_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:  
     metadata:
     - dir_path (str, 필수): 프로젝트 경로
@@ -66,20 +60,20 @@ stdout: {"venv": str(venv_path),
 stderr: str
 action: str = "create_venv"
 dir_path: str = "/workspace/"
-```
+
 
 ## 액션 edit 요청된 파일의 내용 수정
-```
+
 def edit(self, target: List[str], metadata: Dict[str, str])
-            """
-        Write multiple files in one call.
-        - target: list of file paths to write (e.g., ["model.py"])
-        - metadata: {<filename>: <content>}
-        Behavior:
-        * If a target file already exists, create a backup: file.ext.bak (or .bak.N)
-        * Match metadata by filename only (basename).
-        Return stdout as a dict: {message, changes:[{file, bak}], errors?}
-        """
+    """
+Write multiple files in one call.
+- target: list of file paths to write (e.g., ["model.py"])
+- metadata: {<filename>: <content>}
+Behavior:
+* If a target file already exists, create a backup: file.ext.bak (or .bak.N)
+* Match metadata by filename only (basename).
+Return stdout as a dict: {message, changes:[{file, bak}], errors?}
+"""
 
 stdout: str = "message: "edited 2 files", 
 "files": {
@@ -89,11 +83,10 @@ stdout: str = "message: "edited 2 files",
 stderr: str
 action: str = "create_venv"
 dir_path: str = "/workspace/"
-```
+
 
 
 ## 액션 "run_in_venv" 가상환경 python 기반 코드 실행
-```
 def run_in_venv(self, metadata: Dict[str, Any])
 """
 metadata:
@@ -106,4 +99,3 @@ stdout: str   <= 해당 py파일의 실행결과 출력
 stderr: str
 action: str = "run_in_venv"
 dir_path: str = "/workspace/"
-```

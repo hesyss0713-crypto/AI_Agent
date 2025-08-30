@@ -74,8 +74,15 @@ class Supervisor:
             task = build_task("git", "create_venv", metadata={"dir_path": "AI_Agent_Model/","requirements":"requirements.txt"})
             self.socket.send_supervisor_response(task)
         
-        # 4. 파일 수정 요청
+        
+        ## 4. 파일 내용 읽어 들이기
         elif action == "create_venv" and result !=None:
+            task = build_task("git", "read_py_files", metadata={"dir_path": "AI_Agent_Model/"})
+            self.socket.send_supervisor_response(task)
+        
+        
+        # 5. 파일 수정 요청
+        elif action == "read_py_files" and result !=None:
             coder_input = self.load_prompts(path=BASE_DIR/"config"/"experiment.yaml")["file_content"]
             model_summary = self.git_handler.summarize_experiment(coder_input, persistent=False)
             print(model_summary)
@@ -87,7 +94,7 @@ class Supervisor:
             task = build_task(command="git", action="edit", target=target, metadata=metadata)
             self.socket.send_supervisor_response(task)
     
-        #5번  수정된 모델 train
+#         #6번  수정된 모델 train
         elif action == "edit" and result !=None:
             task = build_task(command='train', action='run_in_venv', target='train.py', metadata={"cwd":"AI_Agent_Model/","venv_path":"AI_Agent_Model/venv"})
             self.socket.send_supervisor_response(task)   
