@@ -73,7 +73,111 @@ class FileManager:
         except Exception as e:
             return self._err(str(e))
 
+    @register("create_venv")
+    def create_venv(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        metadata:
+        - dir_path (str, 필수): 프로젝트 경로
+        - venv_name (str, 선택): 가상환경 폴더명 (기본 '.venv')
+        - requirements (str, 선택): requirements.txt 경로(상대/절대 모두 허용)
+        - upgrade_deps (bool, 선택): pip/setuptools 업그레이드 여부 (기본 True)
+        - python_version (str, 선택): '3.10', '3.11' 같이 원하는 메이저.마이너 버전
+        - interpreter (str, 선택): 사용할 파이썬 실행 파일(명령) 경로/이름 (예: '/usr/bin/python3.10', 'py -3.10')
+        """
+        try:
+            dir_path = metadata.get("dir_path")
+            if not dir_path:
+                return self._err("Required: metadata.dir_path")
 
+            venv_name      = metadata.get("venv_name", ".venv")
+            requirements   = metadata.get("requirements")
+            upgrade_deps   = bool(metadata.get("upgrade_deps", True))
+            python_version = metadata.get("python_version")  # e.g. "3.10"
+            explicit_interp= metadata.get("interpreter")     # full path or command
+
+            project_dir = Path(dir_path).expanduser().resolve()
+            project_dir.mkdir(parents=True, exist_ok=True)
+            venv_path = project_dir / venv_name
+
+            # -------- 인터프리터 해석 로직 --------
+            def _resolve_interpreter(version: str | None, explicit: str | None) -> list[str]:
+                # 1) 명시된 interpreter 우선
+                if explicit:
+                    # 공백이 포함될 수 있으니 토큰 단위로 처리
+                    return explicit.split()
+
+                # 2) 버전 지정이 없으면 현재 인터프리터 사용
+                if not version:
+                    return [sys.executable]
+
+                candidates: list[list[str]] = []
+                if os.name == "nt":
+                    # Windows: py 런처 우선
+                    candidates += [["py", f"-{version}"]]
+                    candidates += [[f"python{version}"], [f"python{version.replace('.', '')}"]]
+                else:
+                    # POSIX
+                    candidates += [[f"python{version}"], [f"python{version.split('.')[0]}"]]
+
+                for cmd in candidates:
+                    exe = shutil.which(cmd[0])
+                    if not exe:
+                        continue
+                    # 버전 검사
+                    try:
+                        out = subprocess.check_output(
+                            cmd + ["-c", "import sys;print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+                            text=True
+                        ).strip()
+                        if out == version or out.startswith(version):
+                            cmd[0] = exe  # 정규화된 절대경로로 치환
+                            return cmd
+                    except Exception:
+                        continue
+
+                raise FileNotFoundError(f"Python {version} interpreter not found on PATH.")
+
+            interp_cmd = _resolve_interpreter(python_version, explicit_interp)
+
+            # -------- venv 생성 --------
+            # 주의: --upgrade-deps는 파이썬 버전에 따라 없을 수 있으므로,
+            # 여기서는 안전하게 기본 생성 후 pip로 업그레이드 수행.
+            subprocess.check_call([*interp_cmd, "-m", "venv", str(venv_path)])
+
+            # python/pip 경로
+            if os.name == "nt":
+                py = venv_path / "Scripts" / "python.exe"
+                pip = venv_path / "Scripts" / "pip.exe"
+            else:
+                py = venv_path / "bin" / "python"
+                pip = venv_path / "bin" / "pip"
+
+            # deps 업그레이드
+            if upgrade_deps:
+                subprocess.check_call([str(py), "-m", "pip", "install", "-U", "pip", "setuptools", "wheel"])
+
+            # requirements 설치
+            if requirements:
+                req_path = Path(requirements)
+                if not req_path.is_absolute():
+                    req_path = project_dir / req_path
+                if not req_path.exists():
+                    return self._err(f"requirements not found: {req_path}")
+                subprocess.check_call([str(pip), "install", "-r", str(req_path)])
+
+            return self._ok({
+                "venv": str(venv_path),
+                "python": str(py),
+                "pip": str(pip),
+                "installed": bool(requirements),
+                "upgraded": upgrade_deps,
+                "interpreter_cmd": interp_cmd,  # 어떤 해석기를 사용했는지 기록
+            })
+
+        except subprocess.CalledProcessError as cpe:
+            return self._err(f"venv/pip failed (returncode={cpe.returncode})")
+        except Exception as e:
+            return self._err(str(e))
     
     
     

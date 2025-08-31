@@ -39,66 +39,39 @@ class Supervisor:
     def on_coder_message(self, msg: dict):
         print("[Supervisor] 이벤트 수신:", msg)
 
-        # if msg.get("command") == "git":
-        #     if msg.get("action") == "edit":
-        #         metadata = msg.get("metadata", {})
-        #         print("\n[Supervisor] Coder가 제안한 코드 수정안:")
-        #         for filename, content in metadata.items():
-        #             print(f"\n--- {filename} ---\n{content}\n")
-                
-        #         user_input = input("[Supervisor] 이 수정 내용으로 학습을 진행할까요?")
-        #         intent = self.intent_cls.get_intent(user_input)
+        if msg.get("command") == "git":
+            if msg.get("action") == "edit":
+                metadata = msg.get("metadata", {})
+                print("\n[Supervisor] Coder가 제안한 코드 수정안:")
+                for filename, content in metadata.items():
+                    print(f"\n--- {filename} ---\n{content}\n")
 
-        #         if intent == "positive":
-        #             print("[Supervisor] 수정안을 토대로 학습을 진행하겠습니다.")
-        #             task = build_task(command="git", action="run", target="train.py")
-        #             self.socket.send_supervisor_response(task)
-                    
-        #         elif intent == "negative":
-        #             print("[Supervisor] 수정이 취소되었습니다. 입력 루프로 돌아갑니다.")
-        #             raise StopIteration
-                
-        #         elif intent == "revise":
-        #             print("[Supervisor] 수정 재요청")
+                user_input = input("[Supervisor] 이 수정 내용으로 학습을 진행할까요?")
+                intent = self.intent_cls.get_intent(user_input)
+
+                if intent == "positive":
+                    print("[Supervisor] 수정안을 토대로 학습을 진행하겠습니다.")
+                    task = build_task(command="git", action="run", target="train.py")
+                    self.socket.send_supervisor_response(task)
+
+                elif intent == "negative":
+                    print("[Supervisor] 수정이 취소되었습니다. 입력 루프로 돌아갑니다.")
+                    raise StopIteration
+
+                elif intent == "revise":
+                    print("[Supervisor] 수정 재요청")
+
+            elif msg.get("action") == "clone_repo":
+                if msg.get("result") == "success":
+                    print("[Supervisor] 환경 세팅 완료.")
+                    task=build_task("git", "read_py_files", metadata={"dir_path": "AI_Agent_Model/"})
+                    self.socket.send_supervisor_response(task)
+
+            elif msg.get("action") == "read_py_files":
+                model_summary = self.git_handler.summarize_experiment(msg, persistent=True)
+                print(model_summary)
+
             
-        action = msg["action"]
-        result = msg["result"]
-        # 2. git clone한 파일 목록 요청
-        if action == "clone_repo" and result !=None:
-            task = build_task("git", "list_files", metadata={"dir_path": "AI_Agent_Model/"})
-            self.socket.send_supervisor_response(task)
-
-        
-        # 3. 파일 목록 요청후 (사용자 승인하에) 가상 환경 생성
-        elif action == "list_files" and result !=None:
-            task = build_task("git", "create_venv", metadata={"dir_path": "AI_Agent_Model/","requirements":"requirements.txt"})
-            self.socket.send_supervisor_response(task)
-        
-        
-        ## 4. 파일 내용 읽어 들이기
-        elif action == "create_venv" and result !=None:
-            task = build_task("git", "read_py_files", metadata={"dir_path": "AI_Agent_Model/"})
-            self.socket.send_supervisor_response(task)
-        
-        
-        # 5. 파일 수정 요청
-        elif action == "read_py_files" and result !=None:
-            coder_input = self.load_prompts(path=BASE_DIR/"config"/"experiment.yaml")["file_content"]
-            model_summary = self.git_handler.summarize_experiment(coder_input, persistent=False)
-            print(model_summary)
-# -------------------------------------------------------------------------------------------------------------------------
-
-            # 수정할지 안할지 정해야함. [그냥 진행, 아예 빠져나가기] -> 사용자 입력으로 받아야하니 on_coder말고 여기서 받아서 진행.(아예 빠져나가기 -> continue while 처음으로 돌리기)
-            edit_input = "model.py에 fc_layer 를 3개만 추가해줘"
-            target, metadata = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=False)
-            task = build_task(command="git", action="edit", target=target, metadata=metadata)
-            self.socket.send_supervisor_response(task)
-    
-#         #6번  수정된 모델 train
-        elif action == "edit" and result !=None:
-            task = build_task(command='train', action='run_in_venv', target='train.py', metadata={"cwd":"AI_Agent_Model/","venv_path":"AI_Agent_Model/venv"})
-            self.socket.send_supervisor_response(task)   
-        
     def run(self):
         """Supervisor 메인 실행 루프"""
         self.llm.load_model()
@@ -166,6 +139,6 @@ class Supervisor:
 if __name__ == "__main__":
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"
     host = "0.0.0.0"
-    port = 9002
+    port = 9006
     supervisor = Supervisor(model_name, host, port)
     supervisor.run()
