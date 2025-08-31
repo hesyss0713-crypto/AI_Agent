@@ -24,12 +24,14 @@ class Supervisor:
         # config 로드 (prompts.yaml)
         self.prompts = self.load_prompts()
 
-        self.emitter = event_emitter.EventEmitter()
+        self.emitter = self.socket.emitter
         # Router, IntentClassifier, Handlers 초기화
         self.router = CommandRouter(self.llm, self.prompts)
         self.intent_cls = IntentClassifier(self.llm, self.prompts)
         self.git_handler = GitHandler(self.llm, self.prompts)
         self.emitter.on("coder_message", self.on_coder_message)
+
+        self.py_files = None
 
     def load_prompts(self, path="/workspace/AI_Agent/Supervisor/config/prompts.yaml") -> dict:
         """system prompt yaml 로드"""
@@ -51,19 +53,48 @@ class Supervisor:
 
                 if intent == "positive":
                     print("[Supervisor] 수정안을 토대로 학습을 진행하겠습니다.")
-                    task = build_task(command="git", action="run", target="train.py")
+                    task = build_task(command="git", action="run_in_venv", target="train.py",metadata={"cwd":"simple-object-detection/","venv_path":"simple-object-detection/venv"})
                     self.socket.send_supervisor_response(task)
                     
                 elif intent == "negative":
                     print("[Supervisor] 수정이 취소되었습니다. 입력 루프로 돌아갑니다.")
                     raise StopIteration
-                
+                 
                 elif intent == "revise":
                     print("[Supervisor] 수정 재요청")
+
+            elif msg.get("action") == "clone_repo":
+                if msg.get("result") == "success":
+                    print("[Supervisor] 환경 세팅 완료.")
+                    task = build_task("git", "read_py_files", metadata={"dir_path": "simple-object-detection/"})
+                    self.socket.send_supervisor_response(task)                
             
-            elif msg.get("action") == "repo_files":
+            elif msg.get("action") == "read_py_files":
+                self.py_files = msg
+                print(f"files_py_msg : {msg}")
                 model_summary = self.git_handler.summarize_experiment(msg, persistent=True)
-                print(model_summary)
+                print(model_summary["system_summary"])
+
+                user_input = input("[Supervisor] 이 내용으로 진행할까요?")
+                intent = self.intent_cls.get_intent(user_input)
+
+                if intent == "positive":
+                    task = build_task("git", "create_venv", metadata={"dir_path": "simple-object-detection/","requirements":"requirements.txt"})
+                    self.socket.send_supervisor_response(task)
+
+                elif intent == "negative":
+                    print("[Supervisor] 취소되었습니다. 입력 루프로 돌아갑니다.")
+                    raise StopIteration                
+            
+            elif msg.get("action") == "create_venv":
+                if msg.get("result") == "success":
+                    edit_input = input("수정할 내용을 입력해주세요: ")
+                    target, metadata = self.git_handler.generate_edit_task(edit_input, self.py_files, persistent=True)
+                    task = build_task(command="git", action="edit", target=target, metadata=metadata)
+                    self.socket.send_supervisor_response(task)
+
+
+
 
     def run(self):
         """Supervisor 메인 실행 루프"""
@@ -83,44 +114,16 @@ class Supervisor:
                     print("[Supervisor] 대화 메모리 초기화됨.")
                     continue
 
+
                 # ===== 1. Command 분류 =====
                 command, persistent = self.router.get_command(text)
 
                 # ===== 2. Command별 처리 =====
                 if command == "git":
                     url = self.git_handler.handle(text, persistent=persistent)
-                    task = build_task(command=command, action="clone_repo", metadata={url})
-                    self.socket.send_supervisor_response(task)
-                    ## coder로 부터 세팅 되었다고 알림 받아야함. on_coder에서    
-    # -------------------------------------------------------------------------------------------------------------------------
-                    # git repo clone 이후 → experiment 요약 + 수정
-                    coder_input = self.load_prompts("/workspace/AI_Agent/Supervisor/config/experiment.yaml")["file_content"]
-                    model_summary = self.git_handler.summarize_experiment(coder_input, persistent=persistent)
-                    print(model_summary)
-    # -------------------------------------------------------------------------------------------------------------------------
-                    user_input = input("[Supervisor] 수정하시겠습니까?")
-                    intent = self.intent_cls.get_intent(user_input)
-                    
-                    if intent == "positive":
-                        edit_input = input("수정할 내용을 입력해주세요: ")
-                        target, metadata = self.git_handler.generate_edit_task(edit_input, coder_input, persistent=persistent)
-                        task = build_task(command=command, action="edit", target=target, metadata=metadata)
-                        self.socket.send_supervisor_response(task)
-                    else:
-                        continue
-                    
-    # --------------user 실행 여부 check --------------------------------------------------------------------------------------------
-                    
-                    task = build_task(command='train', action='run', target='train.py')
+                    task = build_task(command=command, action="clone_repo", metadata={"git_url":url})
                     self.socket.send_supervisor_response(task)
 
-                elif command == "conversation":
-                    reply = self.llm.run_with_prompt(self.prompts["conversation"], text, persistent=persistent)
-                    print("[Conversation]", reply)
-
-                else:
-                    print(f"[Supervisor] 아직 구현되지 않은 명령: {command}")
-            
             except StopIteration:
                 continue
 

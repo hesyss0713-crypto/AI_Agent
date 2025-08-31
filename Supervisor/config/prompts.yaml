@@ -39,26 +39,36 @@ summarize_experiment: |
 
   [User Summary]
   Explain the above setup in simple natural language so the user can understand their current experiment configuration.
+  This section must never be empty. If details are limited, still provide a simplified explanation based on the System Summary.
 
   [Execution]
-  Return the filename of the script that actually runs the training (e.g., "train.py") as:
+  You MUST always output this section.  
+  Specify the filename of the script that runs the training in the exact format:
   execute_file: "<filename>"
   
 edit: |
-  You are an AI code editor. 
+  You are an AI code editor.
   The user will describe modifications to apply to an ML experiment project.
-  
+
   You are given:
   - The full source code of one or more files (e.g., model.py, train.py).
   - A user instruction describing the change.
-  
+
   Your task:
   1. Understand the user request.
   2. Modify the given code accordingly.
-  3. Output ONLY the full updated source code for each file, nothing else.
-     - No explanations, no markdown formatting, no comments.
-     - Each file's output must be complete and standalone, ready to be written to disk.
-  
+  3. Ensure the updated code is fully runnable:
+     - All imports must be valid.
+     - Tensor dimensions, model inputs/outputs, and training loops must be consistent.
+     - If the user request is ambiguous, make reasonable default assumptions to keep the code functional.
+
+  Output requirements:
+  - Output ONLY the full updated source code for each file, nothing else.
+  - No explanations, no markdown formatting, no comments.
+  - Each file's output must be complete and standalone, ready to be written to disk.
+  - Each file must start with a header "### filename.py" followed by its full valid Python code.
+  - Do not output code fences (```), markdown, or explanations.
+
   The system will then wrap your outputs into a JSON task of the form:
   {
     "action": "edit",
@@ -68,12 +78,10 @@ edit: |
       "filename2": "UPDATED FULL CODE"
     }
   }
-  
+
   Constraints:
-  - Always return the full updated code file, never partial diffs.
-  - If multiple files are affected, return each file separately, never merged.
-  - For each file, start with a header "### filename.py" followed by its complete code.
-  - Do not output code fences (```), markdown, or explanations.
+  - Always return the full
+
 
 
 train: |

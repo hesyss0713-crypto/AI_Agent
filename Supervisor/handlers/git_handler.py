@@ -35,13 +35,13 @@ class GitHandler:
         return match.group(0) if match else ""
 
     def summarize_experiment(self, coder_input: dict, persistent: bool = False) -> dict:
-        files = coder_input.get("coder_message", {}).get("metadata", {}).get("files", [])
-        merged_code = "\n\n".join([f"### {f['filename']}\n{f['content']}" for f in files])
+        files = coder_input.get("metadata", {}).get("stdout", [])
+        merged_code = "\n\n".join([f"### {f['path'].split('/')[-1]}\n{f['content']}" for f in files])
 
         raw_summary = self.llm.run_with_prompt(
             self.sysprompts["summarize_experiment"],
             merged_code,
-            max_new_tokens=256,
+            max_new_tokens=1024,
             persistent=persistent
         )
 
@@ -57,10 +57,20 @@ class GitHandler:
         return {"system_summary": sys_part, "user_summary": user_part}
 
     def generate_edit_task(self, user_input: str, experiment: dict, persistent: bool = False) -> dict:
-        files = experiment.get("coder_message", {}).get("metadata", {}).get("files", [])
+        """
+                {
+            "stdout": [
+                {"path": "AI_Agent_Model/model.py", "content": "..."},
+                {"path": "AI_Agent_Model/utils/helpers.py", "content": "..."},
+                {"path": "AI_Agent_Model/train.py", "content": "..."}
+            ],
+            "stderr": None
+        }
+        """
+        files = experiment.get("metadata", {}).get("stdout", [])
         messages = [f"User request: {user_input}"]
         for f in files:
-            messages.append(f"### {f['filename']}\n{f['content']}")
+            messages.append(f"### {f['path'].split('/')[-1]}\n{f['content']}")
         combined_message = "\n\n".join(messages)
 
         raw_output = self.llm.run_with_prompt(

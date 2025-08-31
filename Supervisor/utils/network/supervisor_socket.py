@@ -36,8 +36,7 @@ class SupervisorServer:
                     break
 
                 try:
-                    task_data = json.loads(data.decode())
-                    print(f"[Supervisor] Received: {task_data}", flush=True)                
+                    task_data = json.loads(data.decode())      
                     self.emitter.emit("coder_message", task_data)
 
                 except json.JSONDecodeError:
@@ -52,7 +51,7 @@ class SupervisorServer:
             if isinstance(response, dict):
                 response = json.dumps(response).encode("utf-8")
             elif isinstance(response, str):
-                response = response.encode("utf-8")
+                response = json.dumps(response).encode("utf-8")
             self.conn.sendall(response)
         except Exception as e:
             print(f"[Supervisor] 응답 전송 오류: {e}")

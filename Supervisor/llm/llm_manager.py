@@ -9,7 +9,7 @@ class LLMManager:
         self.model_name = model_name
         self.model = None
         self.tokenizer = None
-
+        
         # 기본 메세지 세팅
         self.message = [{"role": "system", "content": "You are a helpful assistant."}]
     
@@ -40,10 +40,10 @@ class LLMManager:
         - persistent=False → 1회성 실행
         """
         if persistent:
-            self.messages.append({"role": "system", "content": system_prompt})
-            self.messages.append({"role": "user", "content": user_content})
-            result = self.generate(self.messages, max_new_tokens=max_new_tokens)
-            self.messages.append({"role": "assistant", "content": result})
+            self.message.append({"role": "system", "content": system_prompt})
+            self.message.append({"role": "user", "content": user_content})
+            result = self.generate(self.message, max_new_tokens=max_new_tokens)
+            self.message.append({"role": "assistant", "content": result})
         else:
             temp_messages = [
                 {"role": "system", "content": system_prompt},
