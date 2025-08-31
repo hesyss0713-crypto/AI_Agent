@@ -1,0 +1,6 @@
+torch
+transformers
+psycopg2-binary
+tqdm
+rich
+accelerate

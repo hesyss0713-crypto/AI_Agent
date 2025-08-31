@@ -1,0 +1,10 @@
+supervisor_message_schema:
+  command: ""         # 필수, e.g., git / setup / code / train ...
+  action: ""          # 필수, e.g., clone_repo / start / execute ...
+  target: ""          # 필수, e.g., model.py / requirements.txt / URL ...
+  metadata: null      # 선택, 세부 옵션 없으면 null
+
+coder_message_schema:
+  result: ""        
+  metadata: null      # 선택, 세부 옵션 없으면 null
+  
