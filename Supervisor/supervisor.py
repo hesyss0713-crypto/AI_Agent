@@ -64,8 +64,11 @@ class Supervisor:
             elif msg.get("action") == "clone_repo":
                 if msg.get("result") == "success":
                     print("[Supervisor] 환경 세팅 완료.")
-                    task=build_task("git", "read_py_files", metadata={"dir_path": "AI_Agent_Model/"})
+                    # task=build_task("git", "read_py_files", metadata={"dir_path": "AI_Agent_Model/"})
+                    # self.socket.send_supervisor_response(task)
+                    task = build_task("git", "create_venv", metadata={"dir_path": "AI_Agent_Model/","requirements":"requirements.txt"})
                     self.socket.send_supervisor_response(task)
+                    
 
             elif msg.get("action") == "read_py_files":
                 model_summary = self.git_handler.summarize_experiment(msg, persistent=True)
