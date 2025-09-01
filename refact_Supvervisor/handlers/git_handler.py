@@ -86,7 +86,7 @@ class GitHandler:
         files = experiment.get("metadata", {}).get("stdout", [])
         messages = [f"User request: {user_input}"]
         for f in files:
-            messages.append(f"### {f['path'].split('/')[-1]}\n{f['content']}")
+            messages.append(f"{f['path'].split('/')[-1]}\n{f['content']}")
         combined_message = "\n\n".join(messages)
 
         raw_output = self.llm.run_with_prompt(

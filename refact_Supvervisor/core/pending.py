@@ -8,6 +8,8 @@ class PendingActionManager:
 
     def add(self, action_type: str, msg: dict):
         """새 pending action 추가"""
+        if not msg["response"]:
+            msg["response"] = None
         action_id = str(uuid.uuid4())
         self.queue.append({
             "id": action_id,

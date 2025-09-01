@@ -8,6 +8,9 @@ from llm.llm_manager import LLMManager
 from core.event_dispatcher import EventDispatcher
 from core.pending import PendingActionManager
 
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RESET = "\033[0m"
 
 class Supervisor:
     def __init__(self, model_name: str, host: str, port: int):
@@ -52,48 +55,43 @@ class Supervisor:
 
         state = "idle"   # idle | pending
         pending = None
-        print("[Supervisor] 무엇을 도와드릴까요?")
+        print(f"{YELLOW}[Supervisor] 무엇을 도와드릴까요?{RESET}")
         
         while True:
             try:
-                if self.pending_manager.has_pending():
-                    # pending 등록 → 상태 전환
-                    state = "pending"
+                # 먼저 pending을 전부 처리
+                while self.pending_manager.has_pending():
                     pending = self.pending_manager.pop()
-
-                if state == "pending" and pending:
-                    # pending
-                    text = input(f"[Supervisor] ({pending['type']}) >>> ")
+                    text = input(f"{GREEN}{pending['msg']['response'] or pending['type']} >>> {RESET} ")
                     msg = {
                         "command": None,
                         "action": "user_input_pending",
                         "text": text,
                         "pending": pending
                     }
-                    # pending 처리 끝 → 다시 idle로 전환
-                    state, pending = "idle", None
+                    self.emitter.emit("user_message", msg)
+                    continue
 
-                else:
-                    # 일반
-                    text = input(" >>> ")
+                # pending이 다 비었으면 일반 입력으로
+                text = input(f"{YELLOW} >>> {RESET}")
 
-                    if text.lower() == "exit":
-                        print("[Supervisor] 종료")
-                        break
-                    if text.lower() == "reset":
-                        self.llm.reset_memory()
-                        print("[Supervisor] 대화 메모리 초기화됨.")
-                        continue
+                if text.lower() == "exit":
+                    print(f"{YELLOW}[Supervisor] 종료{RESET}")
+                    break
+                if text.lower() == "reset":
+                    self.llm.reset_memory()
+                    print(f"{YELLOW}[Supervisor] 대화 메모리 초기화됨.{RESET}")
+                    continue
 
-                    msg = {
-                        "command": None,
-                        "action": "user_input_normal",
-                        "text": text
-                    }
-
+                msg = {
+                    "command": None,
+                    "action": "user_input_normal",
+                    "text": text
+                }
                 self.emitter.emit("user_message", msg)
 
             except StopIteration:
                 continue
+
 
 

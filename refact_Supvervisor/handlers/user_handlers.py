@@ -26,13 +26,13 @@ def register_user_handlers(supervisor):
             print(f"[Conversation] {response}")
 
         elif command == "search":
-            print(f"[Supervisor] 알 수 없는 command: {command}")
+            print(f"[Supervisor] Unkown command: {command}")
 
         elif command == "agent":
-            print(f"[Supervisor] 알 수 없는 command: {command}")
+            print(f"[Supervisor] Unkown command: {command}")
 
         else:
-            print(f"[Supervisor] 알 수 없는 command: {command}")
+            print(f"[Supervisor] Unkown command: {command}")
 
     # Pending 응답 처리
 
@@ -43,30 +43,45 @@ def register_user_handlers(supervisor):
         git_url = supervisor.last_git_url
         dir_name = supervisor.last_dir_name
 
-        if pending["type"] == "git_read_confirm":
-            intent = intent_cls.get_intent(text)
+        if pending["type"] == "read_py_files":
+            intent = intent_cls.get_intent(text, pending['msg']["response"])
             if intent == "positive":
                 task = build_task("git", "create_venv",
                                   metadata={"dir_path": f"{dir_name}/",
                                             "requirements": "requirements.txt"})
                 socket.send_supervisor_response(task)
             elif intent == "negative":
-                print("[Supervisor] 취소되었습니다.")
+                print("[Supervisor] It has been canceled.")
 
         elif pending["type"] == "git_edit_request":
-            edit_input = text
-            target, metadata = git_handler.generate_edit_task(edit_input, supervisor.py_files, persistent=True)
-            task = build_task("git", "edit", target=target, metadata=metadata)
-            socket.send_supervisor_response(task)
+            intent = intent_cls.get_intent(text, pending['msg']["response"])
 
+            if intent == 'revise':
+                target, metadata = git_handler.generate_edit_task(text, supervisor.py_files, persistent=True)
+                task = build_task("git", "edit", target=target, metadata=metadata)
+                socket.send_supervisor_response(task)
+            
+            elif intent == "direct":
+                task = build_task(
+                "git",
+                "run_in_venv",
+                target=supervisor.execute_file,   # ex) train.py
+                metadata={
+                    "cwd": f"{dir_name}/",
+                    "venv_path": f"{dir_name}/venv",
+                    "skip_edit": True  
+                    }
+                )
+                socket.send_supervisor_response(task)
+            
         elif pending["type"] == "git_edit_confirm":
-            intent = intent_cls.get_intent(text)
+            intent = intent_cls.get_intent(text, pending['msg']["response"])
             if intent == "positive":
-                task = build_task("git", "run_in_venv", target=supervisor.execute_file[0],
+                task = build_task("git", "run_in_venv", target=supervisor.execute_file,
                                   metadata={"cwd": f"{dir_name}/",
                                             "venv_path": f"{dir_name}/venv"})
                 socket.send_supervisor_response(task)
             elif intent == "negative":
-                print("[Supervisor] 수정이 취소되었습니다.")
+                print("[Supervisor] Modification has been canceled.")
             elif intent == "revise":
                 print("[Supervisor] 수정 재요청")
