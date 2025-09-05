@@ -2,7 +2,10 @@ from utils.message_builder import build_task
 from utils.git_utils import extract_repo_name
 import os
 
+GREEN = "\033[92m"
 YELLOW = "\033[93m"
+RED = "\033[91m"
+BLUE = "\033[94m"
 RESET = "\033[0m"
 
 def register_git_handlers(supervisor):
@@ -14,6 +17,14 @@ def register_git_handlers(supervisor):
     def handle_clone(msg):
         # print(f"받은 task :{msg}")
         if msg.get("result") == "success":
+            web_msg = (
+                        f"{msg['action']} 작업 진행 상황\n"
+                        f"요청한 repo : {msg['metadata']['stdout']['repo']}\n"
+                        f"결과 : {msg['result']}\n"
+                        f"저장 위치 : {msg['metadata']['dir_path']}"
+                    )
+            
+            supervisor._send_to_bridge(web_msg)
             git_url = msg.get("metadata", {}).get("git_url", "")
             dir_name = extract_repo_name(git_url)
             
@@ -34,20 +45,19 @@ def register_git_handlers(supervisor):
 
         # sys summary
         model_summary = git_handler.summarize_experiment(msg, persistent=True)
-        print(model_summary["system_summary"])
+        supervisor._send_to_bridge(f"{model_summary["system_summary"]}")
         
         # execute file 
         supervisor.execute_file = model_summary.get("execute_file", "train.py")
-        print(f"{YELLOW}[Supervisor] 실행 파일: {supervisor.execute_file}{RESET}")
 
         # pending 등록
         action_id = supervisor.pending_manager.add("read_py_files", msg)
-
+        
 
     @dispatcher.register("git", "create_venv")
     def handle_create_venv(msg):
         if msg.get("result") == "success":
-            msg["response"] = "[Supervisor] Would you like to make modifications, or proceed as is?"
+            msg["response"] = " Would you like to make modifications, or proceed as is?"
             
             # pending 등록
             action_id = supervisor.pending_manager.add("git_edit_request", msg)
@@ -56,10 +66,13 @@ def register_git_handlers(supervisor):
     @dispatcher.register("git", "edit")
     def handle_edit(msg):
         metadata = msg.get("metadata", {})
-        msg["response"] = "[Supervisor] Shall we proceed with training using this modification?"
-        print(f"{YELLOW}\n[Supervisor] Code modification proposed by the Coder:{RESET}")
+        msg["response"] = "Shall we proceed with training using this modification?"
+        print("Code modification proposed by the Coder:")
+        comb = []
         for filename, content in metadata.items():
-            print(f"\n--- {filename} ---\n{content}\n")
+            comb.append(f"\n--- {filename} ---\n{content}\n")
+        web_msg = "\n".join(comb)
+        supervisor._send_to_bridge(web_msg)
 
         # input() 대신 pending 등록
         action_id = supervisor.pending_manager.add("git_edit_confirm", msg)
@@ -72,9 +85,9 @@ def register_git_handlers(supervisor):
 
         if result == "success":
             test_acc = metadata.get("stdout", "N/A")
-            print(f"{YELLOW}\n[Supervisor] Training complete!{RESET}")
-            print(f"[Supervisor]  Test Accuracy: {print(test_acc)}")
+            supervisor._send_to_bridg("\nTraining complete!")
+            supervisor._send_to_bridg(f"Test Accuracy: {print(test_acc)}")
         else:
             err = metadata.get("err", "Unknown error")
-            print(f"{YELLOW}\n[Supervisor] Training failed.{RESET}")
-            print(f"[Supervisor] Error: {err}")
+            supervisor._send_to_bridg(f"\nTraining failed.\n")
+            supervisor._send_to_bridg("Error:")

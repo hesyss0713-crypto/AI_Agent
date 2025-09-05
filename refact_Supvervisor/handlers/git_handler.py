@@ -24,7 +24,7 @@ class GitHandler:
             max_new_tokens=512,
             persistent=persistent
         )
-        print("[GitHandler] 프로젝트 요약:\n", summary)
+        
         print(f"[GitHandler] Coder에게 git clone 요청 : {url}")
         return url
 

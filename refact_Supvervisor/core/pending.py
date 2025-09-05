@@ -7,6 +7,7 @@ class PendingActionManager:
         self.queue = deque()
 
     def add(self, action_type: str, msg: dict):
+        print(">>> Pending 추가됨:", action_type, msg)
         """새 pending action 추가"""
         if not msg["response"]:
             msg["response"] = None
@@ -25,4 +26,4 @@ class PendingActionManager:
         return None
 
     def has_pending(self):
-        return len(self.queue) > 0
+        return bool(self.queue)

@@ -1,8 +1,14 @@
 import socket
 import json
-import threading
+import threading 
 from .event_emitter import EventEmitter
 import struct
+
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+BLUE = "\033[94m"
+RESET = "\033[0m"
 
 class SupervisorServer:
     def __init__(self, host="0.0.0.0", port=9001):
@@ -18,7 +24,7 @@ class SupervisorServer:
         """서버 시작"""
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen()
-        print(f"[Supervisor] Listening on {self.host}:{self.port}")
+        print(f"{RED}[Supervisor] Listening on {self.host}:{self.port}{RESET}")
 
         while True:
             self.conn, self.addr = self.server_socket.accept()
@@ -29,7 +35,7 @@ class SupervisorServer:
 
     def handle_client(self):
         """클라이언트 연결 처리"""
-        print(f"[Supervisor] Connected by {self.addr}")
+        print(f"{RED}[Supervisor] Connected by {self.addr}{RESET}")
         buffer = b""
         expected_len = None
 

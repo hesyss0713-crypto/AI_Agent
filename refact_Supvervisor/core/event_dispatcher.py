@@ -1,6 +1,9 @@
+import logging
+
 class EventDispatcher:
     def __init__(self):
         self.handlers = {}  # (command, action) → 함수
+        self.logger = logging.getLogger(__name__)
 
     def register(self, command: str, action: str):
         """데코레이터로 핸들러 등록"""
@@ -15,4 +18,5 @@ class EventDispatcher:
         if handler:
             return handler(msg)
         else:
-            print(f"[Dispatcher] 핸들러 없음: {key}")
+            self.logger.warning(f"[Dispatcher] 핸들러 없음: {key}")
+            return None
