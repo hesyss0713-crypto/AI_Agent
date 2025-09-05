@@ -10,7 +10,7 @@ const PORT = 9012; // React 웹 포트
 app.use(
   "/api",
   createProxyMiddleware({
-	  target: "http://192.168.104.27:9013", // FastAPI 서버 주소
+	  target: "http://localhost:9013", // FastAPI 서버 주소
     changeOrigin: true,
     logLevel: "debug", // 프록시 로그 확인
      pathRewrite: { "^/api": "" },
@@ -34,6 +34,6 @@ app.get(/.*/, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ React app running at http://192.168.104.27:${PORT}`);
+  console.log(`✅ React app running at http://localhost:${PORT}`);
 });
 

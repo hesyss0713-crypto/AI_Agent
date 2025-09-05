@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---- 브릿지(9013) WebSocket 설정 ----
-BRIDGE_WS_URL = "ws://192.168.104.27:9013/ws/supervisor"
+BRIDGE_WS_URL = "ws://172.17.0.4:9013/ws/supervisor"
 BRIDGE_PING_INTERVAL = 20
 BRIDGE_PING_TIMEOUT = 20
 BRIDGE_RECONNECT_MAX_BACKOFF = 10
