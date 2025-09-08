@@ -68,12 +68,12 @@ class Supervisor:
             if mtype in ("user_input", "input", "prompt", "chat") and text:
                 # 외부 입력을 큐로 보냄
                 self.user_q.put(text)
-                self._send_to_bridge({"type": "user_input(received)", "text": text})
+                # self._send_to_bridge({"type": "user_input(received)", "text": text})
                 return
 
             if mtype == "reset":
                 self.llm.reset_memory()
-                self._send_to_bridge({"type": "system", "text": "LLM memory reset"})
+                self._send_to_bridge("LLM memory reset")
                 return
 
             self._send_to_bridge({"type": "supervisor_log", "text": f"ignored message: {msg}"})
@@ -94,7 +94,7 @@ class Supervisor:
         """user_q에서 사용자 입력을 기다림"""
         while True:
             try:
-                return self.user_q.get(timeout=0.1)
+                return self.user_q.get(timeout=0.5)
             except Empty:
                 time.sleep(0.05)
 
@@ -112,20 +112,19 @@ class Supervisor:
                     pending = self.pending_manager.pop()
                     print(pending)
                     self._send_to_bridge(pending["msg"].get("response"))
-                    text = self._wait_user_text()
+                    text_p = self._wait_user_text()
                     msg = {
                         "command": None,
                         "action": "user_input_pending",
-                        "text": text,
+                        "text": text_p,
                         "pending": pending
                     }
                     self.emitter.emit("user_message",msg)
                     continue
 
                 # pending이 다 비었으면 일반 입력으로
-                self._send_to_bridge("Panding is empty")
                 text = self._wait_user_text()
-
+                
                 if text.lower() == "exit":
                     print(f"{YELLOW}[Supervisor] 종료{RESET}")
                     break
@@ -139,7 +138,8 @@ class Supervisor:
                     "action": "user_input_normal",
                     "text": text
                 }
-                self._send_to_bridge(msg)
+                self.emitter.emit("coder_message", msg)
+                # self._send_to_bridge(msg)
 
             except StopIteration:
                 continue

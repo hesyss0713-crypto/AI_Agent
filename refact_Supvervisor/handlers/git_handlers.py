@@ -37,7 +37,7 @@ def register_git_handlers(supervisor):
     @dispatcher.register("git", "read_py_files")
     def handle_read_files(msg):
         # print(f"받은 task :{msg}")
-        msg["response"] = "[Supervisor] Is this correct?"
+        msg["response"] = "Is this correct?"
         supervisor.py_files = msg
 
         git_url = supervisor.last_git_url
@@ -52,7 +52,7 @@ def register_git_handlers(supervisor):
 
         # pending 등록
         action_id = supervisor.pending_manager.add("read_py_files", msg)
-        
+
 
     @dispatcher.register("git", "create_venv")
     def handle_create_venv(msg):
@@ -85,9 +85,9 @@ def register_git_handlers(supervisor):
 
         if result == "success":
             test_acc = metadata.get("stdout", "N/A")
-            supervisor._send_to_bridg("\nTraining complete!")
-            supervisor._send_to_bridg(f"Test Accuracy: {print(test_acc)}")
+            supervisor._send_to_bridge("\nTraining complete!")
+            supervisor._send_to_bridge(test_acc)
         else:
             err = metadata.get("err", "Unknown error")
-            supervisor._send_to_bridg(f"\nTraining failed.\n")
-            supervisor._send_to_bridg("Error:")
+            supervisor._send_to_bridge(f"\nTraining failed.\n")
+            supervisor._send_to_bridge("Error:")
