@@ -86,7 +86,7 @@ class CodeRunner:
         # 공통 metadata 스키마로 매핑 후 None 값 제거
         try:
             meta = CommonMetadata(**metadata)
-            kwargs = {k: v for k, v in meta.dict().items() if v is not None}
+            kwargs = meta.model_dump(exclude_none=True)
         except Exception as e:
             # 스키마 검증 실패 → 그냥 원본 metadata 사용 (유연성 확보)
             kwargs = {k: v for k, v in metadata.items() if v is not None}

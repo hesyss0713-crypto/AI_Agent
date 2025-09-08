@@ -5,7 +5,7 @@ import sys
 import os
 import time
 import queue
-
+import struct
 
 class CoderClient:
     def __init__(self, host="172.17.0.3", port=9000):
@@ -32,14 +32,22 @@ class CoderClient:
             while self.running:
                 try:
                     # 1. Supervisor → Client : task 수신
-                    data = self.sock.recv(8192)
-                    if not data:
-                        print("[CoderClient] 연결 종료됨.")
-                        break
+                    raw_len = self.sock.recv(4)
+                    if not raw_len:
+                        return None
+                    msg_len = struct.unpack("!I", raw_len)[0]
 
-                    message = json.loads(data.decode())
+                    # 2. msg_len만큼 데이터 수신
+                    data = b""
+                    while len(data) < msg_len:
+                        packet = self.sock.recv(msg_len - len(data))
+                        if not packet:
+                            return None
+                        data += packet
+
+                    # 3) JSON 디코딩
+                    message= json.loads(data.decode("utf-8"))
                     print("[CoderClient] 받은 task:", message)
-                    
                     self.on_message(message)
 
                 except Exception as e:
