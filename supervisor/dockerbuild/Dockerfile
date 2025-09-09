@@ -1,5 +1,5 @@
 FROM ubuntu:24.04
-WORKDIR /home/llm_agent
+WORKDIR /workspace
 EXPOSE 9001 9002 9003 9004 9005
 
 
@@ -17,19 +17,31 @@ RUN apt-get update && apt-get install -y \
     curl \
     systemd \
     xrdp \
-    supervisor wget curl git net-tools \
+    supervisor wget git net-tools \
     fluxbox fonts-liberation libxss1 lsb-release libappindicator3-1 \
     libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2 libgbm1 \
     libgtk-3-0 libnss3 libxcomposite1 libxdamage1 libxrandr2 \
-    x11vnc xvfb fluxbox  \
+    x11vnc xvfb \
     python3 python3-pip \
     openssh-server \
-    tesseract-ocr-kor\
-    onts-nanum \
+    tesseract-ocr-kor \
+    fonts-nanum \
     fonts-noto-cjk \
     fonts-unfonts-core \
-    && apt clean
+    vim \
+    dbus-x11 \
+    apt-transport-https \
+    software-properties-common \
+    lxterminal \
+    libx11-xcb1
 
+
+
+# VSCode 최신 안정 버전 다운로드 및 설치
+RUN wget -O /tmp/code_latest_amd64.deb https://go.microsoft.com/fwlink/?LinkID=760868 \
+    && apt-get update \
+    && apt-get install -y /tmp/code_latest_amd64.deb \
+    && rm /tmp/code_latest_amd64.deb
 
 # openssh 설치
 
@@ -59,15 +71,17 @@ RUN mkdir -p /var/run/sshd && \
 # COPY sshd_config /etc/ssh/sshd_config
 
 
-# 사용자 생성 아이디: llm 비밀번호: llm
-RUN useradd -m -s /bin/bash llm && echo "llm:llm" | chpasswd && adduser llm sudo
+# 사용자 생성 아이디: tester 비밀번호: tester
+RUN useradd -m -s /bin/bash tester && echo "tester:tester" | chpasswd && adduser tester sudo
 
 # 사용자 홈에 .xsession 생성
-USER llm
+USER tester
 RUN echo "startxfce4" > ~/.xsession
+
 
 # 다시 루트로 전환
 USER root
+
 
 # xrdp 설정
 RUN systemctl enable xrdp
@@ -83,10 +97,22 @@ RUN git clone https://github.com/novnc/noVNC.git /opt/noVNC && \
 RUN mkdir -p ~/.vnc && \
     x11vnc -storepasswd 1234 ~/.vnc/passwd
 
+COPY . /workspace/supervisor
+
 # startup 스크립트 복사 및 권한 부여
-COPY ./startup.sh /opt/startup.sh
-RUN chmod +x /opt/startup.sh
+RUN chmod +x /workspace/supervisor/dockerbuild/startup.sh
 
 
 # 컨테이너 시작 시 스크립트 실행
-CMD ["/bin/bash", "/opt/startup.sh"]
+CMD ["/bin/bash", "/workspace/supervisor/dockerbuild/startup.sh"]
+
+# Python venv 생성 (root에서 실행)
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip setuptools wheel
+
+# venv를 기본 Python으로 쓰도록 환경변수 세팅
+ENV PATH="/opt/venv/bin:$PATH"
+
+# requirements.txt 있다면 추가
+
+RUN pip install -r /workspace/supervisor/requirements.txt
