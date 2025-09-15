@@ -64,36 +64,34 @@ class CodeRunner:
 
     @staticmethod
     def _normalize_incoming(message: dict):
-        """
-        Normalize Supervisor → CodeRunner message into (command, action, kwargs, reply_meta).
-
-        - command: 상위 카테고리 (예: git, run, etc.)
-        - action: 실행할 액션명
-        - kwargs: handler에 전달할 인자 (metadata + target)
-        - reply_meta: 응답 매칭용 id
-        """
         if not isinstance(message, dict):
             return None, None, {}, {}
 
         command = message.get("command")
         action = message.get("action")
         metadata = message.get("metadata", {}) or {}
-        target = message.get("target") or []
+        target = message.get("target")
 
-        if target:
-            metadata["target"] = target
-
-        # 공통 metadata 스키마로 매핑 후 None 값 제거
+        # 기본 kwargs 생성
         try:
             meta = CommonMetadata(**metadata)
             kwargs = meta.model_dump(exclude_none=True)
-        except Exception as e:
-            # 스키마 검증 실패 → 그냥 원본 metadata 사용 (유연성 확보)
+        except Exception:
             kwargs = {k: v for k, v in metadata.items() if v is not None}
 
+        # target이 있으면 kwargs에 추가
+        if target:
+            kwargs["target"] = target
+
+        # edit일 때 파일 내용도 같이 넘기기
+        if action == "edit" and metadata:
+            kwargs["files"] = metadata   # {"path": "content"} dict 그대로
+
+        # 응답 매칭 메타데이터
         reply_meta = {k: message[k] for k in ("task_id", "id", "request_id") if k in message}
 
         return command, action, kwargs, reply_meta
+        
 
     @staticmethod
     def _wrap_payload(command: str, action: str | None, kwargs: Dict[str, Any], reply_meta: Dict[str, Any], handler_result: Dict[str, Any], started_at: str, finished_at: str, duration_ms: int) -> Dict[str, Any]:
@@ -138,6 +136,7 @@ class CodeRunner:
         finished_at = datetime.now(timezone.utc).isoformat()
 
         payload = self._wrap_payload(command,action, kwargs, reply_meta, handler_result, started_at, finished_at, duration_ms)
+        print(payload)
         self.client.send_message(payload)
 
     def run(self):

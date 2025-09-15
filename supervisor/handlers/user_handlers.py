@@ -54,7 +54,7 @@ def register_user_handlers(supervisor):
             supervisor._send_to_bridge(f"your intent : {intent}")
             if intent == "positive":
                 task = build_task("git", "create_venv",
-                                  metadata={"dir_path": f"{dir_name}/",
+                                metadata={"dir_path": f"{dir_name}/",
                                             "requirements": "requirements.txt"})
                 socket.send_supervisor_response(task)
             elif intent == "negative":
@@ -67,18 +67,18 @@ def register_user_handlers(supervisor):
 
             if intent == 'revise':
                 target, metadata = git_handler.generate_edit_task(text, supervisor.py_files, persistent=True)
+                
                 task = build_task("git", "edit", target=target, metadata=metadata)
                 socket.send_supervisor_response(task)
             
-            elif intent == "direct":
+            elif intent in ("positive", "direct"):   # ← direct와 positive 모두 run_in_venv 실행
                 task = build_task(
-                "git",
-                "run_in_venv",
-                target=supervisor.execute_file,   # ex) train.py
-                metadata={
-                    "cwd": f"{dir_name}/",
-                    "venv_path": f"{dir_name}/venv",
-                    "skip_edit": True  
+                    "git",
+                    "run_in_venv",
+                    target=supervisor.execute_file,   # ex) train.py
+                    metadata={
+                        "cwd": f"{dir_name}/",
+                        "venv_path": f"{dir_name}/venv",
                     }
                 )
                 socket.send_supervisor_response(task)
@@ -87,9 +87,9 @@ def register_user_handlers(supervisor):
             supervisor._send_to_bridge(pending['msg']["response"])
             intent = intent_cls.get_intent(text, pending['msg']["response"])
             supervisor._send_to_bridge(f"your intent : {intent}")
-            if intent == "positive":
+            if intent in ("positive", "direct"):   # ← 여기서도 direct 허용
                 task = build_task("git", "run_in_venv", target=supervisor.execute_file,
-                                  metadata={"cwd": f"{dir_name}/",
+                                metadata={"cwd": f"{dir_name}/",
                                             "venv_path": f"{dir_name}/venv"})
                 socket.send_supervisor_response(task)
             elif intent == "negative":

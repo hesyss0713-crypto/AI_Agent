@@ -12,6 +12,8 @@ from queue import Queue, Empty
 from typing import Optional, Dict, Any
 from core.pending import PendingActionManager
 import time
+import os
+from pathlib import Path
 
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -21,12 +23,12 @@ class Supervisor:
     def __init__(self, model_name: str, host: str, port: int):
         # Core components
         self.llm = LLMManager(model_name)
-        self.db = DBManager()
+        #self.db = DBManager()
         self.socket = supervisor_socket.SupervisorServer(host, port)
         self.prompts = self.load_prompts()
         self.emitter = self.socket.emitter
         self.dispatcher = EventDispatcher()
-        self.pending_manager = PendingActionManager()
+        self.pending_manager = PendingActionManager(self.emitter)
         self.logger = logging.getLogger(__name__)
 
         #Bridge
@@ -41,7 +43,7 @@ class Supervisor:
         # 이벤트 연결
         self.emitter.on("coder_message", self.handle_event)
         self.emitter.on("user_message", self.handle_event)
-
+        self.emitter.on("pending_added", self.pending_handler)
         # py file 상태
         self.py_files : str | None = None
 
@@ -49,9 +51,11 @@ class Supervisor:
         self.last_git_url : str | None = None
         self.last_dir_name : str | None = None
 
-    def load_prompts(self, path="/workspace/AI_Agent/refact_Supvervisor/config/prompts.yaml") -> dict:
+    def load_prompts(self, path="/config/prompts.yaml") -> dict:
         """system prompt yaml 로드"""
-        with open(path, "r", encoding="utf-8") as f:
+        BASE_DIR = Path(__file__).resolve().parents[1]
+        prompts_path = BASE_DIR / "config" / "prompts.yaml"
+        with open(prompts_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
     def handle_event(self, msg: dict):
@@ -59,16 +63,37 @@ class Supervisor:
         result = self.dispatcher.dispatch(msg)
         return result
     
+    def pending_handler(self, pending):
+        """pending이 추가되면 호출됨"""
+        print("📌 Pending 감지:", pending)
+
+        # 브릿지에 알림
+        self._send_to_bridge(pending["msg"].get("response"))
+
+    
+
     def _on_bridge_message(self, msg: Dict[str, Any]):
-        """브릿지로부터 들어온 메시지 처리"""
         try:
             mtype = str(msg.get("type", "")).lower()
             text = str(msg.get("text", "")).strip()
 
             if mtype in ("user_input", "input", "prompt", "chat") and text:
-                # 외부 입력을 큐로 보냄
-                self.user_q.put(text)
-                # self._send_to_bridge({"type": "user_input(received)", "text": text})
+                if self.pending_manager.has_pending():
+                    # pending이 있으면 pop 해서 pending 응답으로 처리
+                    pending = self.pending_manager.pop()
+                    self.emitter.emit("user_message", {
+                        "command": None,
+                        "action": "user_input_pending",
+                        "text": text,
+                        "pending": pending,
+                    })
+                else:
+                    # 일반 입력
+                    self.emitter.emit("coder_message", {
+                        "command": None,
+                        "action": "user_input_normal",
+                        "text": text,
+                    })
                 return
 
             if mtype == "reset":
@@ -106,25 +131,8 @@ class Supervisor:
         
         while True:
             try:
-                # 먼저 pending을 전부 처리
-                print("큐 상태:", list(self.pending_manager.queue))
-                if self.pending_manager.has_pending():
-                    pending = self.pending_manager.pop()
-                    print(pending)
-                    self._send_to_bridge(pending["msg"].get("response"))
-                    text_p = self._wait_user_text()
-                    msg = {
-                        "command": None,
-                        "action": "user_input_pending",
-                        "text": text_p,
-                        "pending": pending
-                    }
-                    self.emitter.emit("user_message",msg)
-                    continue
-
-                # pending이 다 비었으면 일반 입력으로
                 text = self._wait_user_text()
-                
+
                 if text.lower() == "exit":
                     print(f"{YELLOW}[Supervisor] 종료{RESET}")
                     break
@@ -133,13 +141,13 @@ class Supervisor:
                     print(f"{YELLOW}[Supervisor] 대화 메모리 초기화됨.{RESET}")
                     continue
 
+                # 일반 입력만 처리 (pending은 이벤트 기반으로 따로 처리됨)
                 msg = {
                     "command": None,
                     "action": "user_input_normal",
-                    "text": text
+                    "text": text,
                 }
                 self.emitter.emit("coder_message", msg)
-                # self._send_to_bridge(msg)
 
             except StopIteration:
                 continue

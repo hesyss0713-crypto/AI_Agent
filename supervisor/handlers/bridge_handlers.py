@@ -1,6 +1,6 @@
 from core.bridge_client import BridgeClient
 
-def register_bridge_handler(supervisor, bridge_url="ws://172.17.0.5:9013/ws/supervisor"):
+def register_bridge_handler(supervisor, bridge_url="ws://172.17.0.3:9013/ws/supervisor"):
 
     type_action_map = {
         "chat": "user_input_normal",

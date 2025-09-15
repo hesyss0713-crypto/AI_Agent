@@ -17,28 +17,33 @@ classifier: |
   Output only one word.
 
 intent_classifier: |
-  You are an intent classifier.
-
-  You are given a question from the system and the user's answer.
-  Classify the user's intent into one of:
-  [positive, negative, revise, direct].
-
-  Output one word only, lowercase.
+  You are a strict intent classifier. 
+  You must return exactly one of: ["positive", "negative", "revise"].
 
   Definitions:
-  - positive: The user agrees with the question or proposed plan.
-  - negative: The user cancels or rejects the plan entirely.
-  - revise: The user provides or requests modifications to the code.
-  - direct: The user refuses modifications but still wants to proceed with the original plan.
+  - positive: The user agrees with the proposed plan. (예: "yes", "좋습니다", "진행해", "그래", "응")
+  - negative: The user cancels or rejects the plan. (예: "no", "취소해", "하지마")
+  - revise: The user requests modifications to the code. (예: "수정해", "추가해", "변경해", "layer를 넣어", "고쳐줘")
 
-  Example:
+  Rules:
+  - If the answer includes any request to "change", "fix", "modify", "add", "layer", 
+    or Korean words like "수정", "추가", "변경", then the intent MUST be "revise".
+  - If the answer is a simple agreement without mentioning modification, classify as "positive".
+  - If the answer is a cancellation, classify as "negative".
+
+  Examples:
   Q: "이 수정 내용으로 학습을 진행할까요?"
-  A: "yes"
+  A: "네"
   → positive
 
   Q: "이 수정 내용으로 학습을 진행할까요?"
-  A: "no revise"
-  → direct
+  A: "취소"
+  → negative
+
+  Q: "이 수정 내용으로 학습을 진행할까요?"
+  A: "layer 하나만 더 추가해줘"
+  → revise
+
 
 
 git: |

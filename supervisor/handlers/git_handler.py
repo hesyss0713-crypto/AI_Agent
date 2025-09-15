@@ -102,9 +102,18 @@ class GitHandler:
                 if current_file and buffer:
                     result[current_file] = "\n".join(buffer).strip()
                     buffer = []
-                current_file = line.replace("### ", "").strip()
+
+                # 파일명만 나온 경우 원본 stdout에서 path로 매핑
+                filename = line.replace("### ", "").strip()
+                for f in files:
+                    if f['path'].endswith(filename):
+                        current_file = f['path']  # 전체 경로 사용
+                        break
+                else:
+                    current_file = filename  # fallback (매칭 실패 시 그대로)
             else:
                 buffer.append(line)
+
         if current_file and buffer:
             result[current_file] = "\n".join(buffer).strip()
 

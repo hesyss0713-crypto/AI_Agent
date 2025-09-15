@@ -22,7 +22,7 @@ def register_git_handlers(supervisor):
                         f"{msg['action']} 작업 진행 상황\n"
                         f"요청한 repo : {msg['metadata']['stdout']['repo']}\n"
                         f"결과 : {msg['result']}\n"
-                        f"저장 위치 : {msg['metadata']['dir_path']}"
+                        f"저장 위치 : {msg['metadata']['stdout']['dir_path']}"
                     )
             
             supervisor._send_to_bridge(web_msg)
@@ -77,7 +77,7 @@ def register_git_handlers(supervisor):
 
         # input() 대신 pending 등록
         action_id = supervisor.pending_manager.add("git_edit_confirm", msg)
-
+        
     @dispatcher.register("git", "run_in_venv")
     def handle_result(msg):
         # print(f"받은 task :{msg}")
