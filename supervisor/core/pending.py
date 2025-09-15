@@ -6,7 +6,7 @@ class PendingActionManager:
     def __init__(self):
         self.queue = deque()
 
-    def add(self, action_type: str, msg: dict):
+    def add(self, action_type: str, msg: dict, tabId: int):
         print(">>> Pending 추가됨:", action_type, msg)
         """새 pending action 추가"""
         if not msg["response"]:
@@ -15,7 +15,8 @@ class PendingActionManager:
         self.queue.append({
             "id": action_id,
             "type": action_type,
-            "msg": msg
+            "msg": msg,
+            "tabId":tabId
         })
         return action_id
 

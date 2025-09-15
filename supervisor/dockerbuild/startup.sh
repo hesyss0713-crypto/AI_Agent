@@ -13,10 +13,6 @@ xauth add :1 . $(xauth list :1 | awk '{print $3}')
 fluxbox &
 sleep 0.5
 
-
-
-
-
 grep -q "(LXTerminal)" /root/.fluxbox/menu 2>/dev/null || \
     sed -i '/^\[end\]/i\  [exec] (LXTerminal) {lxterminal}' /root/.fluxbox/menu
 grep -q "(VScode)" /root/.fluxbox/menu 2>/dev/null || \

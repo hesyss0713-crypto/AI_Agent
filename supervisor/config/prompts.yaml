@@ -12,9 +12,9 @@ classifier: |
   - "code" → if the request is about writing, modifying, or explaining code, algorithms, or models.
   - "conversation" → for general chat, casual questions, or anything outside the above categories.
 
-  Output only one word
-
   Output only one word.
+
+ 
 
 intent_classifier: |
   You are an intent classifier.

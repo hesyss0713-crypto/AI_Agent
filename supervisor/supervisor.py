@@ -3,6 +3,7 @@ from core.supervisor_base import Supervisor
 from handlers.user_handlers import register_user_handlers
 from handlers.git_handlers import register_git_handlers
 from handlers.bridge_handlers import register_bridge_handler
+import asyncio
 
 logging.basicConfig(level=logging.INFO)
 

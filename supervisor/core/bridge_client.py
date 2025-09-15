@@ -1,5 +1,7 @@
-# core/bridge_client.py
-import asyncio, json, logging, threading
+import json
+import logging
+import threading
+import asyncio
 import websockets
 from typing import Optional, Dict, Any
 
@@ -8,6 +10,7 @@ logger = logging.getLogger(__name__)
 BRIDGE_PING_INTERVAL = 20
 BRIDGE_PING_TIMEOUT = 20
 BRIDGE_RECONNECT_MAX_BACKOFF = 10
+
 
 class BridgeClient:
     def __init__(self, url: str, on_incoming: callable):
@@ -89,6 +92,7 @@ class BridgeClient:
             except Exception:
                 data = {"type": "raw", "text": raw}
             try:
+                # 동기 콜백 호출 (await 아님)
                 self.on_incoming(data)
             except Exception as e:
                 logger.exception("[Bridge] on_incoming error: %s", e)
